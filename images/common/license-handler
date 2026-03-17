@@ -1,0 +1,104 @@
+#!/bin/bash
+
+## region ########################################### Functions
+
+# @description Function to extract the repository name from a GitHub or GitLab URL
+# @arg $1 string URL
+# @stdout Repo Name
+extract_repo_name() {
+  local url="$1"
+  if [[ "$url" =~ github\.com/([^/]+)/([^/]+)$ ]]; then
+    echo "${BASH_REMATCH[2]}"
+  elif [[ "$url" =~ gitlab\.com/([^/]+)/([^/]+)$ ]]; then
+    echo "${BASH_REMATCH[2]}"
+  else
+    echo ""
+  fi
+}
+
+# @description Function to display usage information
+# @stdout string Usage information
+usage() {
+  echo "Usage: $0 --source <SOURCE> --license <LICENSE_FILE> --files <FILE_PATTERN>"
+  echo "  --source <SOURCE>          Upstream source (e.g., GitHub or GitLab repository URL)"
+  echo "  --license <LICENSE_FILE>   Path to the LICENSE file"
+  echo "  --files <FILE_PATTERN>     File pattern for which the copyright applies (e.g., '*')"
+  exit 0
+}
+
+## endregion ######################################## Functions
+
+## region ########################################### Input Handling
+
+# Parse command-line arguments
+while [[ "$#" -gt 0 ]]; do
+  case $1 in
+  --source)     sourceUrl="$2";     shift ;;
+  --name)       upstreamName="$2";  shift ;;
+  --license)    licenseFile="$2";   shift ;;
+  --files)      filePattern="$2";   shift ;;
+  -h|--help)    usage ;;
+  *) echo "Unknown parameter passed: $1"; exit 1 ;;
+  esac
+  shift
+done
+
+# Check if required arguments are provided
+if [ -z "$sourceUrl" ] || [ -z "$licenseFile" ] || [ -z "$filePattern" ]; then
+  echo "Error: All required arguments must be provided."
+  usage
+fi
+
+# Check if the LICENSE file exists
+if [ ! -f "$licenseFile" ]; then
+  echo "Error: LICENSE file $licenseFile does not exist."
+  exit 1
+fi
+
+## endregion ######################################## Functions
+
+## region ########################################### Main Code
+
+# Extract the upstream name from the source URL
+if [ -z "$upstreamName" ]; then
+  upstreamName=$(extract_repo_name "$sourceUrl")
+fi
+
+# Read the LICENSE file
+licenseContent=$(cat "$licenseFile")
+
+# Use licensecheck to determine the license name
+licenseCheck=$(licensecheck --deb-machine "$licenseFile" | grep -v "UNLICENSED" | sort | uniq -c | sort -nr)
+
+copyright=$(echo "$licenseCheck" | grep "Copyright: ")
+if [ -z "$copyright" ]; then
+  copyright=$(echo "$licenseContent" | grep -i "copyright" | head -n 1 | sed 's/Copyright://g' | sed 's/copyright://g' | sed 's/  */ /g' | sed 's/^ *//g' | sed 's/ *$//g')
+fi
+
+upstreamContact=$(echo "$licenseCheck" | grep "Upstream-Contact: " | awk -F': ' '{ print $2 }')
+if [ -z "$upstreamContact" ] && [ -n "$copyright" ]; then
+  ucName=$(echo "$licenseCheck" | grep "Copyright: " | grep -oP '(?<=[0-9[:punct:]])\s*\K[^<]+(?=\s<)' | xargs)
+  ucEmail=$(echo "$licenseCheck" | grep -oP '(?<=<)[^>]+(?=>)')
+  if [ -n "$ucName" ] && [ -n "$ucEmail" ]; then
+    upstreamContact="$ucName <$ucEmail>"
+  fi
+fi
+
+licenseShort=$(echo "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }')
+
+[ -z "$copyright" ] && copyright="$sourceUrl"
+
+# Create the copyright file
+echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
+[ -n "$upstreamName" ] && "Upstream-Name: $upstreamName"
+[ -n "$upstreamContact" ] && echo "Upstream-Contact: "
+echo "Source: $sourceUrl"
+echo ""
+[ -n "$filesPattern" ] && echo "Files: $filePattern"
+echo "Copyright: $COPYRIGHT_HOLDER"
+echo "License: $licenseShort"
+echo ""
+echo "$licenseContent"
+exit 0
+
+## endregion ######################################## Main Code
