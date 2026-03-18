@@ -1,0 +1,8 @@
+#!/command/execlineb -P
+with-contenv
+
+env
+
+# Set healthcheck sleep delay to 20ms
+s6-notifyoncheck -s 20
+/usr/sbin/apache2ctl -DFOREGROUND

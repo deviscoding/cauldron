@@ -7,7 +7,7 @@ set -e
 : "${APACHE_CONFDIR:=/etc/apache2}"
 : "${APACHE_ENVVARS:=$APACHE_CONFDIR/envvars}"
 if test -f "$APACHE_ENVVARS"; then
-	# shellcheck source=../common/etc/apache2/envars.default
+	# shellcheck source=../../../etc/apache2/envvars.default
 	. "$APACHE_ENVVARS"
 fi
 

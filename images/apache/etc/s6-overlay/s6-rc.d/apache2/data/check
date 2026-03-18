@@ -1,0 +1,13 @@
+#!/command/with-contenv sh
+
+url="http://localhost:80${HEALTHCHECK_PATH}"
+opts="--fail --location --insecure --silent --show-error --output /dev/null"
+code=$(curl $opts -w "%{http_code}" "$url")
+
+if [ "$?" -eq "0" ]; then
+  echo "SUCCESS: Apache + PHP-FPM"
+  exit 0
+else
+  echo "FAILURE: Apache + PHP-FPM ($code)"
+  exit 1
+fi
