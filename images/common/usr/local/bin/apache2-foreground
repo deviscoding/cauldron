@@ -1,0 +1,70 @@
+#!/bin/bash
+
+### NOTE: This was copied from the php:7.0-apache Docker repo ###
+set -e
+
+# Avoid using 'apache2ctl' as it does not use 'exec' and leaves behind an undesired shell process
+: "${APACHE_CONFDIR:=/etc/apache2}"
+: "${APACHE_ENVVARS:=$APACHE_CONFDIR/envvars}"
+if test -f "$APACHE_ENVVARS"; then
+	# shellcheck source=../common/etc/apache2/envars.default
+	. "$APACHE_ENVVARS"
+fi
+
+# Apache gets grumpy about PID files pre-existing
+: "${APACHE_RUN_DIR:=/var/run/apache2}"
+: "${APACHE_PID_FILE:=$APACHE_RUN_DIR/apache2.pid}"
+rm -f "$APACHE_PID_FILE"
+
+if [ -n "${WWWDATA_UID}" ]; then
+	usermod --non-unique --uid "${WWWDATA_UID}" www-data
+fi
+
+# create missing directories
+# (especially APACHE_RUN_DIR, APACHE_LOCK_DIR, and APACHE_LOG_DIR)
+for e in "${!APACHE_@}"; do
+	if [[ "$e" == *_DIR ]] && [[ "${!e}" == /* ]]; then
+		# handle "/var/lock" being a symlink to "/run/lock", but "/run/lock" not existing beforehand,
+		# so "mkdir -p /var/lock/something" fails with "mkdir: cannot create directory '/var/lock': File exists"
+		dir="${!e}"
+		while [ "$dir" != "$(dirname "$dir")" ]; do
+			dir="$(dirname "$dir")"
+			if [ -d "$dir" ]; then
+				break
+			fi
+			absDir="$(readlink -f "$dir" 2>/dev/null || :)"
+			if [ -n "$absDir" ]; then
+				mkdir -p "$absDir"
+			fi
+		done
+
+		mkdir -p "${!e}"
+	fi
+done
+
+# Pass Environment Variables
+namespace="cauldron-env"
+env_conf="$APACHE_CONFDIR/conf-available/${namespace}.conf"
+[ -f "$env_conf" ] && echo "" >> "$env_conf"
+echo "# Added by Cauldron (from /etc/profile.d/apache-*.sh)" >> "$env_conf"
+for file in /etc/profile.d/apache-*.sh; do
+	# Check if the file exists
+	if [ -f "$file" ]; then
+		# Extract exported environment variables using grep and awk
+		export_vars=$(grep -E '^[ \t]*export[ \t]+[A-Za-z0-9_]+\=[^;]*' "$file" | awk '{print $2}' | cut -d'=' -f1)
+		# Check if any exported variables were found
+		if [ -n "$export_vars" ]; then
+			for var_name in $export_vars; do
+				echo "PassEnv $var_name" >> "$env_conf"
+			done
+		fi
+	fi
+done
+[ -f "env_conf" ] && /usr/sbin/a2enconf "$namespace"
+
+# Disable
+if [ "$CONTAINER_ENV" != "prod" ]; then
+  /usr/sbin/a2enconf docker-dev
+fi
+
+exec apache2 -DFOREGROUND "$@"
