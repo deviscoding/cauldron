@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y licensecheck
 # Builder
 FROM ${BASE_IMAGE}
 COPY --chmod=755 fix-debian-stretch-sources /usr/local/bin/fix-debian-stretch-sources
-COPY --chmod=755 --from=common ./cauldron-env-executables /usr/local/bin/cauldron-env-executables
+COPY --chmod=755 --from=common ./cauldron-env /usr/local/bin/cauldron-env
 COPY --chmod=755 --from=common ./cauldron-pkg-copy /usr/local/bin/cauldron-pkg-copy
 COPY --chmod=755 --from=common ./usr/local/sbin/license-handler /usr/local/sbin/license-handler
 COPY --from=stage-license-check --chmod=755 /usr/bin/licensecheck /usr/bin/licensecheck
