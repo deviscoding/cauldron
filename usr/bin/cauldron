@@ -1,0 +1,244 @@
+#!/bin/bash
+
+# @description Builds Docker images from Dockerfile files, assisting with authentication and builder settings, then
+# uploads the finished images to Docker Hub.
+#
+# Note that DockerHub images attached to personal usernames must be refreshed every six months, even if not changed.
+#
+# @arg $imageName string Docker Hub Username
+# @exitcode 0 Success
+# @exitcode 1 Error
+
+script_version="1.0"
+projPath=$(pwd)
+imageDir=$(dirname "$projPath")
+projName=$(basename "$projPath")
+imageName="$projName"
+dockerfile="$projPath/Dockerfile"
+myDir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+## region ###################################### Argument Handling
+
+isNoCache=false
+isPush=false
+PLATFORMS=""
+BUILD_ARG_STRING=""
+BUILD_ARGS=()
+while [ "$1" != "" ]; do
+  # Check flags
+  case "$1" in
+    --no-cache )                BUILD_ARGS+=("--no-cache"); ;;
+    --push )                    BUILD_ARGS+=("--push");        ;;
+    --user )                    dhUser="$2"; shift; ;;
+    --version )                 echo "build-image v${script_version}"; exit ;;
+    --arm64 )                   PLATFORMS="$PLATFORMS,linux/arm64" ;;
+    --amd64 )                   PLATFORMS="$PLATFORMS,linux/amd64" ;;
+    --platforms )               PLATFORMS="$2"; shift; ;;
+    --tag )                     BUILD_ARGS+=("--var" "TAG=$2"); shift ;;
+    --var )                     BUILD_ARGS+=("--var" "$2"); shift ;;
+    * )                         bakePath="$1";;
+  esac
+  shift # move to next kv pair
+done
+
+if [ -n "$PLATFORMS" ]; then
+  PLATFORMS=$(echo "$PLATFORMS" | sed 's/^,//') # Remove leading comma if exists
+fi
+
+## endregion ################################### End Argument Handling
+
+# Horizonal Rules are Cool
+HR="---------------------------------------------"
+
+# Terminal Colors
+if [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
+  colorRed=$(/usr/bin/tput setaf 1) #"\033[1;31m"
+  colorBlue=$(/usr/bin/tput setaf 4) #"\033[1;36m"
+  colorEnd=$(/usr/bin/tput sgr0) #"\033[0m"
+else
+  colorRed="" && colorBlue="" && colorEnd=""
+fi
+
+## region ###################################### Functions
+
+# @description Ask a yes/no question and return a boolean answer.
+# @arg $1 string The yes/no Question
+# @stdout string The question, printed in blue
+# @exitcode 0 Yes
+# @exitcode 1 No
+function ask() {
+  local reply
+
+  echo -e -n "${colorBlue}$1${colorEnd} [y/n] "
+  read -r reply </dev/tty
+  case "$reply" in
+      Y*|y*) return 0 ;;
+      N*|n*) return 1 ;;
+  esac
+}
+
+# @description Evaluates if the buildx plugion is installed
+# @noargs
+# @exitcode 0 Buildx Installed
+# @exitcode 1 Buildx Not Installed
+function has-buildx() {
+  docker info 2> /dev/null | grep -q "buildx"
+}
+
+# @description Prints the builder name currently being used by the buildx plugin.
+# @noargs
+# @stdout string Builder Name (or empty string)
+function buildx-name() {
+  docker buildx inspect 2> /dev/null | grep "Name:" | awk -F":" '{ print $2 }' | head -1 | xargs
+}
+
+# shellcheck source=./functions/_dockerhub.sh
+source "$myDir/functions/_dockerhub.sh"
+# shellcheck source=./functions/_hcl.sh
+source "$myDir/functions/_hcl.sh"
+
+## endregion ################################### End Functions
+
+#
+# Docker Login
+#
+cachedDhUser=$(dockerhub::username::cached)
+# If not set, Docker Hub username From environment
+[ -z "$dhUser" ] && [ -n "$COMPOSE_USER" ] && dhUser="$COMPOSE_USER"
+# If not set, Docker Hub username from Docker cached credentials
+[ -z "$dhUser" ] && dhUser="$cachedDhUser"
+# If not set, Docker Hub username from the machine hostname
+[ -z "$dhUser" ] && dhUser="$(dockerhub::username::domain)"
+if [ -z "$dhUser" ]; then
+  # We have to have a username to start off
+  echo "${colorRed}No Docker Hub username was found. Please supply this with the --user <username> flag for the first run.${colorEnd}"
+  exit 1
+elif [[ "$dhUser" != "$cachedDhUser" ]]; then
+  # If the username differs, then we need to log out & log in
+  echo "$HR"
+  ! docker logout && echo "$HR" && exit 1
+  ! docker login --username "$dhUser" && echo "$HR" && exit 1
+  echo "$HR"
+elif [ -z "$cachedDhUser" ]; then
+  # If we have a username, but no cached credentials, then we need to log in
+  ! docker login --username "$dhUser" && echo "$HR" && exit 1
+  echo "$HR"
+fi
+
+#
+# Docker BuildX Plugin
+#
+if ! has-buildx; then
+  ask "Docker buildx plugin not found. Install?" || exit 1
+  # Install the buildx plugin
+  echo $HR
+  ! docker buildx build . && echo "$HR" && exit 1
+  echo $HR
+  # We use the username for convenience, though it could be anything
+  ! docker buildx create --name "$dhUser" && echo "$HR" && exit 1
+  ! docker buildx use "$dhUser" && echo "$HR" && exit 1
+  echo "$HR"
+else
+  # Just check if we have a builder, and are using it
+  buildxName=$(buildx-name)
+  if [ -z "$buildxName" ]; then
+    echo $HR
+    # Determine if our builder name is already in the list
+    if ! docker buildx ls 2> /dev/null | grep -v "error" | grep -q "$dhUser"; then
+      ! docker buildx create --name "$dhUser" && echo "$HR" && exit 1
+    fi
+    # Use the builder
+    ! docker buildx use "$dhUser" && echo "$HR" && exit 1
+    echo "$HR"
+  fi
+fi
+
+# Build the Question
+if [ -n "$dhUser" ]; then
+  imageTarget="$dhUser/${imageName}:latest"
+else
+  imageTarget="${imageName}:latest"
+fi
+
+if [ -n "$PLATFORMS" ]; then
+  platformsTxt="$PLATFORMS"
+else
+  platformsTxt=$(hcl-get-platforms "$projPath/docker-bake.hcl" | jq -r 'join(",")')
+fi
+
+if [ -n "${BUILD_ARGS[*]}" ]; then
+  ASKING="Proceed with building ${imageTarget/#\//} for $platformsTxt with ${BUILD_ARGS[*]}?"
+else
+  ASKING="Proceed with building ${imageTarget/#\//} for $platformsTxt?"
+fi
+
+if ! ask "$ASKING"; then
+  echo "Aborting build..."
+  exit 0
+fi
+
+#
+# Determine the includes needed
+#
+
+bakeJson=$(hcl2json < "$projPath/docker-bake.hcl")
+bakeTarget=$(jq --arg target "${projName/./}" '.target[$target][]//empty' <<< "$bakeJson")
+if [ -n "$bakeTarget" ]; then
+  bakePhp=$(jq -r '.variable.PHP_VERSION[].default//empty' <<< "$bakeJson")
+  bakeContext=$(jq '.contexts' <<< "$bakeTarget")
+  while IFS="|" read -r key value; do
+    if echo "$value" | grep -q "target:"; then
+      target=$(echo "$value" | sed 's/^target://' | sed "s/\${PHP_VERSION}/$bakePhp/")
+      same=$(jq --arg target "$target" '.target[$target][0]//empty' <<< "$bakeJson")
+      if [ -z "$same" ]; then
+        file=$(hcl-find-target "$projPath" "$target")
+        if [ -n "$file" ]; then
+          BUILD_ARGS+=("-f" "$file")
+        else
+          echo "Missing $target! Exiting..."
+          exit 1
+        fi
+      fi
+    fi
+  done < <(jq -r 'to_entries[] | "\(.key)|\(.value)"' <<< "$bakeContext")
+fi
+BUILD_ARGS+=("-f" "$projPath/docker-bake.hcl")
+
+if [ -n "$PLATFORMS" ]; then
+  BUILD_ARGS+=("--var" "PLATFORMS=$PLATFORMS")
+fi
+
+if [ -n "$dhUser" ]; then
+  BUILD_ARGS+=("--var" "DOCKERHUB_USER=$dhUser")
+fi
+
+echo "${BUILD_ARGS[*]}"
+
+echo "$HR"
+if docker buildx bake "${BUILD_ARGS[@]}" "${projName/./}"; then
+  echo "$HR"
+  exit 0
+else
+  echo $HR
+  echo "${colorRed}Build Process failed. Scroll up in the logs to find the error, then correct the issue.${colorEnd}"
+  echo ""
+fi
+exit
+
+
+# shellcheck disable=SC2086
+if docker buildx build --platform "$PLATFORMS" -t "${imageTarget/#\//}" "${BUILD_ARGS[@]}" .; then
+  rm -R ./common
+  cd "$projPath"
+  [ -n "$dockertemp" ] && rm -R "$dockertemp"
+  echo $HR
+  exit 0
+else
+  rm -R ./common
+  cd "$projPath"
+  # [ -n "$dockertemp" ] && rm -R "$dockertemp"
+  echo $HR
+  echo "${colorRed}Build Process failed. Scroll up in the logs to find the error, then correct the issue.${colorEnd}"
+  echo ""
+  exit 1
+fi
