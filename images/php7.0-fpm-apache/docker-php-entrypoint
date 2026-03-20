@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+# Pass Environment Variables
+namespace="cauldron-env"
+env_conf="$APACHE_CONFDIR/conf-available/${namespace}.conf"
+[ -f "$env_conf" ] && echo "" >> "$env_conf"
+echo "# Added by Cauldron (from /etc/profile.d/apache-*.sh)" >> "$env_conf"
+for file in /etc/profile.d/apache-*.sh; do
+  # Check if the file exists
+  if [ -f "$file" ]; then
+    # Extract exported environment variables using grep and awk
+    export_vars=$(grep -E '^[ \t]*export[ \t]+[A-Za-z0-9_]+\=[^;]*' "$file" | awk '{print $2}' | cut -d'=' -f1)
+    # Check if any exported variables were found
+    if [ -n "$export_vars" ]; then
+      for var_name in $export_vars; do
+        echo "PassEnv $var_name" >> "$env_conf"
+      done
+    fi
+  fi
+done
+[ -f "env_conf" ] && /usr/sbin/a2enconf "$namespace"
+
+# Disable
+if [ "$CONTAINER_ENV" != "prod" ]; then
+  a2enconf docker-dev
+fi
+
+# first arg is `-f` or `--some-option`
+if [ "${1#-}" != "$1" ]; then
+	set -- php "$@"
+fi
+
+# Execute the CMD passed in from the Dockerfile
+exec "$@"
+
