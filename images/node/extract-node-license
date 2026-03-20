@@ -1,0 +1,187 @@
+#!/bin/bash
+
+function do-license-check() {
+  local xLC
+  xLC=$(which licensecheck)
+  if [ -n "$xLC" ]; then
+    echo "$1" > "/tmp/lic.txt"
+    licensecheck --deb-machine "/tmp/lic.txt" | grep -v "UNLICENSED" | sort | uniq -c | sort -nr
+    rm /tmp/lic.txt
+  fi
+}
+
+# @description Parses licencecheck output to extract the copyright
+# @arg $1 string Output from licensecheck
+# @stdout string Copyright
+function lc-copyright() {
+  echo "$1" | grep -i "copyright" | head -n 1 | sed 's/Copyright://g' | sed 's/copyright://g' | sed 's/  */ /g' | sed 's/^ *//g' | sed 's/ *$//g'
+}
+
+function lc-upstream-contact() {
+  local upstreamContact ucName ucEmail
+  upstreamContact=$(echo "$1" | grep "Upstream-Contact: " | awk -F': ' '{ print $2 }')
+  if [ -z "$upstreamContact" ] && [ -n "$2" ]; then
+    ucName=$(echo "$2" | grep -oP '(?<=[0-9[:punct:]])\s*\K[^<]+(?=\s<)' | xargs)
+    ucEmail=$(echo "$2" | grep -oP '(?<=<)[^>]+(?=>)')
+    if [ -n "$ucName" ] && [ -n "$ucEmail" ]; then
+      upstreamContact="$ucName <$ucEmail>"
+    fi
+  fi
+
+  echo "$upstreamContact"
+}
+
+function parse-copyright() {
+  echo "$1" | grep -E "^\s+\**(c|C)opyright" | xargs | grep -v "copyright notice" | sed 's/\*\*//g'
+}
+
+function parse-upstream-contact() {
+  echo "$1" | sed 's/(c) //i'| sed 's/© //' | sed 's/copyright//i' | sed -e 's/^[[:space:]]*//g' | sed -E 's/^[0-9\-]+ //' | awk -F'.' '{print $1}'
+}
+
+function parse-license-short() {
+  local license_content licenseShort
+
+  license_content="$1"
+  if echo "$license_content" | grep -qi "Apache License" && echo "$license_content" | grep -qi "Version 2.0"; then
+    licenseShort="Apache-2.0"
+  elif echo "$license_content" | grep -qi "GNU General Public License, version 2" || echo "$license_content" | grep -qi "GPL v2"; then
+    # DEP-5 uses 'GPL-2' or 'GPL-2+'
+    licenseShort="GPL-2"
+  elif echo "$license_content" | grep -qi "GNU General Public License, version 3"; then
+    licenseShort="GPL-3"
+  elif echo "$license_content" | grep -qi "GNU Lesser General Public License"; then
+    licenseShort="LGPL-2.1" # or LGPL-3 depending on text
+  elif echo "$license_content" | grep -qi "Expat" || echo "$license_content" | grep -qi "Permission is hereby granted, free of charge"; then
+    # DEP-5 specifically prefers 'Expat' over 'MIT' for the standard MIT license
+    licenseShort="Expat"
+  elif echo "$license_content" | grep -qi "BSD 3-Clause License" || echo "$license_content" | grep -qi "3-clause BSD"; then
+    licenseShort="BSD-3-clause"
+  elif echo "$license_content" | grep -qi "BSD 2-Clause License" || echo "$license_content" | grep -qi "2-clause BSD"; then
+    licenseShort="BSD-2-clause"
+  elif echo "$license_content" | grep -qi "Artistic License"; then
+    licenseShort="Artistic"
+  elif echo "$license_content" | grep -qi "Mozilla Public License"; then
+    licenseShort="MPL-2.0"
+  else
+    licenseShort="UNKNOWN"
+  fi
+
+  echo "$licenseShort"
+}
+
+function node-js-only() {
+  sed '/The externally maintained libraries used by Node.js are/q' "$INPUT_FILE" | sed '$d' | sed 's/Node.js is licensed for use as follows://' | sed 's/\"\"\"//' | sed '/./,$!d'
+}
+
+# Input file containing all licenses
+INPUT_FILE="$1"
+
+# Directory to save the individual DEP-5 compliant copyright files
+OUTPUT_DIR="$2"
+
+# Create the output directory if it doesn't exist
+mkdir -p "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR/nodejs"
+
+output_file="$OUTPUT_DIR/nodejs/copyright"
+node_only=$(node-js-only)
+node_copyright=$(echo "$node_only" | grep -E "^Copyright")
+node_contact=$(echo "$node_copyright" | sed 's/(c) //i'| sed 's/© //' | sed 's/copyright//i' | sed -e 's/^[[:space:]]*//g' | sed 's/All rights reserved.//' | xargs)
+node_license=$(parse-license-short "$node_only")
+echo "<license>node.js</license>"
+echo "<file>$output_file</file>"
+echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > "$output_file"
+echo "Upstream-Name: Node.js" >> "$output_file"
+[ -n "$node_contact" ] && echo "Upstream-Contact: $node_contact" >> "$output_file"
+echo "Source: https://github.com/nodejs/node" >> "$output_file"
+echo "" >> "$output_file"
+[ -n "$source" ] && echo "Files: /usr/local/bin/node /usr/local/bin/npm /usr/local/lib/node_modules/npm" >> "$output_file"
+[ -n "$node_copyright" ] && echo "Copyright: $node_copyright" | xargs >> "$output_file"
+[ -n "$node_license" ] && echo "License: $node_license" >> "$output_file"
+echo "" >> "$output_file"
+echo "$node_only" >> "$output_file"
+
+# Initialize variables
+file_name=""
+license_content=""
+output_file=""
+
+exec 3< "$INPUT_FILE"
+
+# Read the input file line by line
+while IFS= read -r -u 3 line; do
+  # Extract Upstream-Name and Source
+  if echo "$line" | grep -qE "\- ([^,]+), located at"; then
+    upstream_name=$(echo "$line" | sed 's/\- //' | awk -F', located at' '{print $1}' | xargs)
+  fi
+
+  if echo "$line" | grep -q "located at "; then
+    source=$(echo "$line" | awk -F', located at ' '{print $2}' | awk -F', ' '{print $1}')
+    pkg=$(echo "$source" | awk -F'/' '{print $2}')
+    file_name="$(basename "$pkg")"
+    output_dir="$OUTPUT_DIR/$file_name"
+    mkdir -p "$output_dir"
+    output_file="$output_dir/copyright"
+  fi
+
+  # Check if the line contains the license start delimiter
+  if [ -n "$upstream_name" ] && [[ "$line" =~ ^[[:space:]]*\"\"\"[[:space:]]*$ ]]; then
+    printf "<license>%s" "$upstream_name"
+    while IFS= read -r -u 3 inner; do
+      if [[ "$inner" =~ ^[[:space:]]*\"\"\"[[:space:]]*$ ]]; then
+        echo "</license>"
+        if [[ -n "$license_content" && -n "$file_name" ]]; then
+          # Use licensecheck to determine the license name
+          licenseCheck=$(do-license-check "$license_content")
+          if [ -f "$licenseCheck" ]; then
+            copyright=$(lc-copyright "$licenseCheck")
+            upstreamContact=$(lc-upstream-contact "$licenseCheck")
+            licenseShort=$(echo "$licenseCheck" | grep "License: " | head -n | awk -F': ' '{ print $2 }')
+          fi
+
+          if [ -z "$copyright" ]; then
+            copyright=$(parse-copyright "$license_content")
+          fi
+
+          if [ -z "$upstreamContact" ] && [ -n "$copyright" ]; then
+            upstreamContact=$(parse-upstream-contact "$copyright")
+          fi
+
+          if [ -z "$licenseShort" ]; then
+            licenseShort=$(parse-license-short "$license_content")
+          fi
+
+          # Write the last accumulated license content to a DEP-5 compliant file if there is any
+          if [[ -n "$license_content" && -n "$file_name" ]]; then
+            echo "<file>$output_file</file>"
+            echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > "$output_file"
+            [ -n "$upstream_name" ] && echo "Upstream-Name: $upstream_name" >> "$output_file"
+            [ -n "$upstreamContact" ] && echo "Upstream-Contact: $upstreamContact" >> "$output_file"
+            echo "" >> "$output_file"
+            [ -n "$source" ] && echo "Files: $source" >> "$output_file"
+            [ -n "$copyright" ] && echo "Copyright: $copyright" >> "$output_file"
+            [ -n "$licenseShort" ] && echo "License: $licenseShort" >> "$output_file"
+            echo "" >> "$output_file"
+            echo "$license_content" >> "$output_file"
+          fi
+        fi
+        file_name=""
+        upstream_name=""
+        source=""
+        upstreamContact=""
+        source=""
+        copyright=""
+        licenseShort=""
+        license_content=""
+        break;
+      fi
+
+      license_content+="$inner"$'\n'
+    done
+  fi
+done
+
+exec 3<&-
+
+echo "Done extracting licenses into DEP-5 compliant files."
