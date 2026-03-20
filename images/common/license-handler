@@ -112,12 +112,12 @@ usage() {
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
   case $1 in
-  --source)     sourceUrl="$2";     shift ;;
-  --name)       upstreamName="$2";  shift ;;
-  --license)    licenseFile="$2";   shift ;;
-  --files)      filePattern="$2";   shift ;;
-  -h|--help)    usage ;;
-  *) echo "Unknown parameter passed: $1"; exit 1 ;;
+  --source)        sourceUrl="$2";     shift ;;
+  --name)          upstreamName="$2";  shift ;;
+  --files)         filePattern="$2";   shift ;;
+  --output | -o)   outputFile="$2";    shift ;;
+  -h|--help)       usage ;;
+  *)               licenseFile="$1"; ;;
   esac
   shift
 done
@@ -128,10 +128,26 @@ if [ -z "$sourceUrl" ] || [ -z "$licenseFile" ] || [ -z "$filePattern" ]; then
   usage
 fi
 
+# Default the output to stdout
+[ -z "$outputFile" ] && outputFile=/dev/stdout
+
 # Check if the LICENSE file exists
 if [ ! -f "$licenseFile" ]; then
   echo "Error: LICENSE file $licenseFile does not exist."
   exit 1
+fi
+
+# Make sure the directory exists
+if [ "$outputFile" != "/dev/stout" ]; then
+  if [ -f "$outputFile" ]; then
+    rm "$outputFile" && touch "$outputFile"
+  else
+    outputDir=$(dirname "$outputFile")
+    [ ! -d "$outputDir" ] && mkdir -p "$outputDir"
+    touch "$outputFile"
+  fi
+  chown root:staff -R "$outputDir"
+  chmod 644 -R "$outputDir"
 fi
 
 ## endregion ######################################## Functions
@@ -160,16 +176,16 @@ licenseShort=$(lc-license-short "$licenseCheck")
 [ -z "$copyright" ] && copyright="$sourceUrl"
 
 # Create the copyright file
-echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
-[ -n "$upstreamName" ] && "Upstream-Name: $upstreamName"
-[ -n "$upstreamContact" ] && echo "Upstream-Contact: "
-echo "Source: $sourceUrl"
-echo ""
-[ -n "$filesPattern" ] && echo "Files: $filePattern"
-echo "Copyright: $COPYRIGHT_HOLDER"
-echo "License: $licenseShort"
-echo ""
-echo "$licenseContent"
+echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > "$outputFile"
+[ -n "$upstreamName" ] && "Upstream-Name: $upstreamName" > "$outputFile"
+[ -n "$upstreamContact" ] && echo "Upstream-Contact: " > "$outputFile"
+echo "Source: $sourceUrl" > "$outputFile"
+echo "" > "$outputFile"
+[ -n "$filesPattern" ] && echo "Files: $filePattern" > "$outputFile"
+echo "Copyright: $COPYRIGHT_HOLDER" > "$outputFile"
+echo "License: $licenseShort" > "$outputFile"
+echo "" > "$outputFile"
+echo "$licenseContent" > "$outputFile"
 exit 0
 
 ## endregion ######################################## Main Codeecho "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }'
