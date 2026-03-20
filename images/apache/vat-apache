@@ -28,7 +28,7 @@ echo "======   End: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
 
 output_file="$APACHE_CONFDIR/conf-available/$1.conf"
 [ -f "$output_file" ] && echo "" >> "$output_file"
-echo "# Added by Cauldron (from /etc/profile.d/apache-*.sh)" >> "$output_file"
+echo "# Added by vat (from /etc/profile.d/apache-*.sh)" >> "$output_file"
 
 for file in /etc/profile.d/apache-*.sh; do
   # Check if the file exists

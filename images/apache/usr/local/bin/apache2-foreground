@@ -43,10 +43,10 @@ for e in "${!APACHE_@}"; do
 done
 
 # Pass Environment Variables
-namespace="cauldron-env"
+namespace="vat-env"
 env_conf="$APACHE_CONFDIR/conf-available/${namespace}.conf"
 [ -f "$env_conf" ] && echo "" >> "$env_conf"
-echo "# Added by Cauldron (from /etc/profile.d/apache-*.sh)" >> "$env_conf"
+echo "# Added by vat (from /etc/profile.d/apache-*.sh)" >> "$env_conf"
 for file in /etc/profile.d/apache-*.sh; do
 	# Check if the file exists
 	if [ -f "$file" ]; then

@@ -12,8 +12,8 @@ RUN /usr/local/sbin/fix-debian-stretch-sources && rm /usr/local/sbin/fix-debian-
 # Builder
 FROM ${BASE_IMAGE}
 COPY --chmod=755 fix-debian-stretch-sources /usr/local/sbin/fix-debian-stretch-sources
-COPY --chmod=755 --from=common ./cauldron-env /usr/local/sbin/cauldron-env
-COPY --chmod=755 --from=common ./cauldron-pkg-copy /usr/local/sbin/cauldron-pkg-copy
+COPY --chmod=755 --from=common ./vat-env /usr/local/sbin/vat-env
+COPY --chmod=755 --from=common ./vat-pkg-copy /usr/local/sbin/vat-pkg-copy
 COPY --chmod=755 --from=common ./license-handler /usr/local/bin/license-handler
 COPY --from=stage-license-check --chmod=755 /usr/bin/licensecheck /usr/bin/licensecheck
 COPY --from=stage-license-check /usr/share/perl5/ /usr/share/perl5/

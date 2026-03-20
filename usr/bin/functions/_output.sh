@@ -61,6 +61,11 @@ function err {
   while IFS= read -r line; do >&2 echo "${colorRed}$line${colorEnd}"; done
 }
 
+function info {
+  local line
+  while IFS= read -r line; do >&2 echo "${colorBlue}$line${colorEnd}"; done
+}
+
 # @description Outputs question text in yellow, and waits for the user to type a reply
 # followed by the enter key.
 #
