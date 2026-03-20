@@ -16,6 +16,85 @@ extract_repo_name() {
   fi
 }
 
+# @description Parses licencecheck output to extract the copyright
+# @arg $1 string Output from licensecheck
+# @stdout string Copyright
+function lc-copyright() {
+  echo "$1" | grep -i "copyright" | head -n 1 | sed 's/Copyright://g' | sed 's/copyright://g' | sed 's/  */ /g' | sed 's/^ *//g' | sed 's/ *$//g'
+}
+
+# @description Parses licencecheck output to extract the Upstream Contact
+# @arg $1 string Output from licensecheck
+# @stdout string Upstream Contact
+function lc-upstream-contact() {
+  local upstreamContact ucName ucEmail
+  upstreamContact=$(echo "$1" | grep "Upstream-Contact: " | awk -F': ' '{ print $2 }')
+  if [ -z "$upstreamContact" ] && [ -n "$2" ]; then
+    ucName=$(echo "$2" | grep -oP '(?<=[0-9[:punct:]])\s*\K[^<]+(?=\s<)' | xargs)
+    ucEmail=$(echo "$2" | grep -oP '(?<=<)[^>]+(?=>)')
+    if [ -n "$ucName" ] && [ -n "$ucEmail" ]; then
+      upstreamContact="$ucName <$ucEmail>"
+    fi
+  fi
+
+  echo "$upstreamContact"
+}
+
+# @description Parses licencecheck output to extract the short license string
+# @arg $1 string Output from licensecheck
+# @stdout string Short License String
+function lc-license-short() {
+  echo "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }'
+}
+
+# @description Parses license text looking for a copyright notice
+# @arg $1 string License Text
+# @stdout string Copyright
+function parse-copyright() {
+  echo "$1" | grep -E "^\s+\**(c|C)opyright" | xargs | grep -v "copyright notice" | sed 's/\*\*//g'
+}
+
+# @description Parses license text to identify the short license type
+# @arg $1 string License Text
+# @stdout string License Short
+function parse-license-short() {
+  local license_content licenseShort
+
+  license_content="$1"
+  if echo "$license_content" | grep -qi "Apache License" && echo "$license_content" | grep -qi "Version 2.0"; then
+    licenseShort="Apache-2.0"
+  elif echo "$license_content" | grep -qi "GNU General Public License, version 2" || echo "$license_content" | grep -qi "GPL v2"; then
+    # DEP-5 uses 'GPL-2' or 'GPL-2+'
+    licenseShort="GPL-2"
+  elif echo "$license_content" | grep -qi "GNU General Public License, version 3"; then
+    licenseShort="GPL-3"
+  elif echo "$license_content" | grep -qi "GNU Lesser General Public License"; then
+    licenseShort="LGPL-2.1" # or LGPL-3 depending on text
+  elif echo "$license_content" | grep -qi "Expat" || echo "$license_content" | grep -qi "Permission is hereby granted, free of charge"; then
+    # DEP-5 specifically prefers 'Expat' over 'MIT' for the standard MIT license
+    licenseShort="Expat"
+  elif echo "$license_content" | grep -qi "BSD 3-Clause License" || echo "$license_content" | grep -qi "3-clause BSD"; then
+    licenseShort="BSD-3-clause"
+  elif echo "$license_content" | grep -qi "BSD 2-Clause License" || echo "$license_content" | grep -qi "2-clause BSD"; then
+    licenseShort="BSD-2-clause"
+  elif echo "$license_content" | grep -qi "Artistic License"; then
+    licenseShort="Artistic"
+  elif echo "$license_content" | grep -qi "Mozilla Public License"; then
+    licenseShort="MPL-2.0"
+  else
+    licenseShort="UNKNOWN"
+  fi
+
+  echo "$licenseShort"
+}
+
+# @description Parses copyright notice looking for an upstream contact
+# @arg $1 string License Text
+# @stdout string Upstream Contact
+function parse-upstream-contact() {
+  echo "$1" | sed 's/(c) //i'| sed 's/© //' | sed 's/copyright//i' | sed -e 's/^[[:space:]]*//g' | sed -E 's/^[0-9\-]+ //' | awk -F'.' '{print $1}'
+}
+
 # @description Function to display usage information
 # @stdout string Usage information
 usage() {
@@ -60,32 +139,24 @@ fi
 ## region ########################################### Main Code
 
 # Extract the upstream name from the source URL
-if [ -z "$upstreamName" ]; then
-  upstreamName=$(extract_repo_name "$sourceUrl")
-fi
+[ -z "$upstreamName" ] && upstreamName=$(extract_repo_name "$sourceUrl")
 
-# Read the LICENSE file
+# Read the LICENSE file & parse with licensecheck
 licenseContent=$(cat "$licenseFile")
-
-# Use licensecheck to determine the license name
 licenseCheck=$(licensecheck --deb-machine "$licenseFile" | grep -v "UNLICENSED" | sort | uniq -c | sort -nr)
 
-copyright=$(echo "$licenseCheck" | grep "Copyright: ")
-if [ -z "$copyright" ]; then
-  copyright=$(echo "$licenseContent" | grep -i "copyright" | head -n 1 | sed 's/Copyright://g' | sed 's/copyright://g' | sed 's/  */ /g' | sed 's/^ *//g' | sed 's/ *$//g')
-fi
+# Get Copyright
+copyright=$(lc-copyright "$licenseCheck")
+[ -z "$copyright" ] && copyright=$(parse-copyright "$licenseContent")
 
-upstreamContact=$(echo "$licenseCheck" | grep "Upstream-Contact: " | awk -F': ' '{ print $2 }')
-if [ -z "$upstreamContact" ] && [ -n "$copyright" ]; then
-  ucName=$(echo "$licenseCheck" | grep "Copyright: " | grep -oP '(?<=[0-9[:punct:]])\s*\K[^<]+(?=\s<)' | xargs)
-  ucEmail=$(echo "$licenseCheck" | grep -oP '(?<=<)[^>]+(?=>)')
-  if [ -n "$ucName" ] && [ -n "$ucEmail" ]; then
-    upstreamContact="$ucName <$ucEmail>"
-  fi
-fi
+upstreamContact=$(lc-upstream-contact "$licenseCheck")
+[ -z "$upstreamContact" ] && [ -n "$copyright" ] && upstreamContact=$(parse-upstream-contact "$copyright")
 
-licenseShort=$(echo "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }')
+# Get Short License
+licenseShort=$(lc-license-short "$licenseCheck")
+[ -z "$licenseShort" ] && licenseShort=$(parse-license-short "$licenseContent")
 
+# Fallback for Copyright
 [ -z "$copyright" ] && copyright="$sourceUrl"
 
 # Create the copyright file
@@ -101,4 +172,4 @@ echo ""
 echo "$licenseContent"
 exit 0
 
-## endregion ######################################## Main Code
+## endregion ######################################## Main Codeecho "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }'
