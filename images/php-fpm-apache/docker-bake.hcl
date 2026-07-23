@@ -114,6 +114,7 @@ target "php70-fpm-apache" {
   contexts = {
     common = "../common"
     apache = "../apache"
+    php    = "../php"
     stage-base       = "target:stage-base"
     stage-gh         = "target:stage-gh"
     stage-jq         = "target:stage-jq"
