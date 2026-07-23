@@ -64,7 +64,7 @@ COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "/var/www/do
 
 # Copy php.ini and php-fpm config
 COPY --from=common usr/local/etc/php/php.ini /usr/local/etc/php/
-COPY --from=common usr/local/etc/php-fpm.d/xx-docker.conf /usr/local/etc/php-fpm.d/
+COPY --from=common usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/
 COPY usr/local/etc/php-fpm.d/zz-silence-health.conf /usr/local/etc/php-fpm.d/
 
 # Copy Configuration Utility
