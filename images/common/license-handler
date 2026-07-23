@@ -188,4 +188,4 @@ echo "" > "$outputFile"
 echo "$licenseContent" > "$outputFile"
 exit 0
 
-## endregion ######################################## Main Codeecho "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }'
+## endregion ######################################## Main Code
