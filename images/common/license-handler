@@ -44,7 +44,7 @@ function lc-upstream-contact() {
 # @arg $1 string Output from licensecheck
 # @stdout string Short License String
 function lc-license-short() {
-  echo "$licenseContent" | grep "License: " | head -n | awk -F': ' '{ print $2 }'
+  echo "$licenseContent" | grep "License: " | head -n 1 | awk -F': ' '{ print $2 }'
 }
 
 # @description Parses license text looking for a copyright notice

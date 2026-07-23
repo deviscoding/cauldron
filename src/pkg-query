@@ -1,0 +1,58 @@
+#!/bin/bash
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Usage: $0 <package-name> <debian-suite>"
+    echo "Example: $0 mupdf-tools jessie"
+    echo "Example: $0 mupdf-tools trixie"
+    exit 1
+fi
+
+PACKAGE="$1"
+SUITE=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+
+# Base URL setup (space included to dodge potential local parsing/truncation bugs)
+BASE_URL="https://snapshot.debian.org"
+PACKAGE_URL="${BASE_URL}/mr/binary/${PACKAGE}/"
+
+echo "Querying snapshot timeline for '${PACKAGE}' matching flavor '${SUITE}'..."
+echo "Please wait, filtering deep archive historical records..."
+
+# Step 1: Extract all available versions for this package
+RESPONSE=$(curl -s "$PACKAGE_URL")
+
+if [ -z "$RESPONSE" ] || echo "$RESPONSE" | grep -q '"error"'; then
+    echo "Error: Package '$PACKAGE' not found in historical snapshots."
+    exit 1
+fi
+
+# Step 2: Use jq to extract the unique versions
+VERSIONS=$(echo "$RESPONSE" | jq -r '.result[].binary_version' | sort -u)
+
+MATCH_FOUND=false
+
+# Step 3: Loop through versions to verify which one maps to the target OS flavor (suite)
+for VER in $VERSIONS; do
+    # Fetch file-info metadata for this specific historical version iteration
+    VER_URL="${BASE_URL}/mr/binary/${PACKAGE}/${VER}/binfiles?fileinfo=1"
+    VER_DATA=$(curl -s "$VER_URL")
+    
+    # Use jq to drill down into the fileinfo and extract matching release components/suites
+    # Checks if any archive component path mentions our target suite (e.g. "dists/jessie")
+    HAS_SUITE=$(echo "$VER_DATA" | jq --arg suite "$SUITE" '
+      if .fileinfo then
+        [.fileinfo[] | .[] | .archive_name + "/" + .path] 
+        | any(contains("dists/" + $suite))
+      else
+        false
+      end
+    ')
+
+    if [ "$HAS_SUITE" = "true" ]; then
+        echo " -> Found version: $VER"
+        MATCH_FOUND=true
+    fi
+done
+
+if [ "$MATCH_FOUND" = "false" ]; then
+    echo "No historical versions of '$PACKAGE' found specifically associated with Debian '$SUITE'."
+fi

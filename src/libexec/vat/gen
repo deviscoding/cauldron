@@ -1,0 +1,388 @@
+#!/usr/bin/env zsh
+
+# @file gen
+# @brief Generates overrides
+# 
+# @flag  --algo      <algorithm>  Algorithm to use for SSH key authentication
+# @flag  --protocol  <protocol>   Protocol to use for Git clone (if not included in URL)
+# 
+# @arg  $1  Docker Compose File
+# @arg  $2  Local name for vat; must be an available local username
+# 
+# @exitcode  1  Unknown Error
+# @exitcode  5  Failed to Pull Images
+# @exitcode 10  Failed to Build Images
+# @exitcode 15  Failed to Create docker-compose.override.yml
+# @exitcode 20  Failed to Create .env.Local
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$(cd -- "$(dirname -- "$0")" && pwd -P)
+selfLib=$( { cd -- "${selfDir/libexec/lib}" || cd -- "$selfDir/lib" || cd -- "$selfDir"; } 2>/dev/null && pwd -P )
+selfName="Ladle Gen"
+selfRepo=""
+selfVer="##VERSION##"
+selfHost=$(hostname -f)
+selfDomain=$(hostname -d)
+selfFlags=("algo:" "protocol:" )
+
+isMac=$( [[ $OSTYPE = darwin* ]] && echo true || echo false )
+cwd=$(pwd)
+
+# Exit Codes
+exitError=1    # Unknown Error
+exitOption=2   # Bad Flag
+exitArg=3      # Missing Argument
+exitPull=5     # Failed to Pull Images
+exitBuild=10   # Failed to Build Image
+exitOver=15    # Failed to docker-compose.override.yml
+exitEnv=20     # Failed to create .env.local
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+Scoops a Vat to Serve
+
+Usage: $selfName [options] <args>
+
+Arguments:
+  <optional yaml file>  Docker Compose File Path (or directory)
+  <optional env file>   .env File Path
+
+Options:
+  --hostname  <hostnames>  Hostnames to use for the vat (comma-separated)
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+Exit Codes:
+
+   1:  Unknown Error
+   2:  Bad Flag
+   3:  No Docker Compose File Found
+   5:  Failed to Pull Images
+  10:  Failed to Create .env.local File
+  15:  Failed to docker-compose.override.yml
+  20:  Failed to create .env.local
+ 
+EOF
+
+# shellcheck source=../lib/_shell.sh
+source "$selfLib/_shell.sh"
+
+# shellcheck source=../lib/_fs.sh
+source "$selfLib/_fs.sh"
+
+# shellcheck source=../../lib/_style.sh
+source "$selfLib/../_style.sh"
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Defaults
+
+# Defaults
+defCpuLimit=2
+defMemLimit="512M"
+defCpuRes=1
+defMemRes="256M"
+
+## endregion ########################################### Defaults
+
+## region ############################################## Functions
+
+compose_find() {
+  local found targetDir
+  if [[ ! -t 0 ]]; then
+      targetDir=$(cat)
+  else
+      targetDir="$1"
+  fi
+
+  # Find the first matching file using standard find flags
+  found=$(find "$targetDir" -type f \( \
+  -name "docker-compose.yml" -o \
+  -name "docker-compose.yaml" -o \
+  -name "compose.yml" -o \
+  -name "compose.yaml" \
+  \) -print 2>/dev/null | head -1)
+
+  # Output the result
+  if [[ -n "$found" ]]; then
+      found=$(cd "$(dirname "$found")" && echo "$(pwd)/$(basename "$found")")
+      echo "$found"
+      return 0
+  fi
+
+  return 1
+}
+
+function action_pull() {
+  local composeDir
+
+  composeDir=$(dirname "$argCompose")
+  cd "$composeDir" || return 1
+
+  docker compose -f "$composeFile" config --format yaml | yq '.services[].image' | xargs -I {} docker pull {}
+}
+
+function action_env() {
+  local service prefix keys key res yamlPath origVal defaultVal domain
+
+  echo "HOST_UID=$(id -u)" >> "$localEnv"
+  echo "HOST_GID=$(id -g)" >> "$localEnv"
+
+  if [[ -z "$COMPOSE_HOST" ]]; then
+    echo "COMPOSE_HOST=\"$flagHost\"" >> "$localEnv"
+  fi
+
+  if [[ -z "$COMPOSE_PROXY" ]]; then
+    echo "COMPOSE_PROXY=\"proxy-net\"" >> "$localEnv"
+  fi
+
+  for service in $(docker compose -f "$argCompose" config --format yaml | yq '.services | keys | .[]'); do
+    prefix=$(echo "$service" | tr '[:lower:]' '[:upper:]' | tr '-' '_' | tr '.' '_')
+    
+    declare -A keys
+    keys[${prefix}_CPU_LIMIT]=".deploy.resources.limits.cpus"
+    keys[${prefix}_MEM_LIMIT]=".deploy.resources.limits.memory"
+    keys[${prefix}_CPU_RESERVE]=".deploy.resources.reservations.cpus"
+    keys[${prefix}_MEM_RESERVE]=".deploy.resources.reservations.memory"
+
+    declare -A res
+    res[${prefix}_CPU_LIMIT]="${defCpuLimit}"
+    res[${prefix}_MEM_LIMIT]="${defMemLimit}"
+    res[${prefix}_CPU_RESERVE]="${defCpuRes}"
+    res[${prefix}_MEM_RESERVE]="${defMemRes}"
+
+    for key in "${(@k)keys}"; do
+      # Check if the key (variable name) already exists in env files
+      if grep -q "^${key}=" "$argEnv" || grep -q "^${key}=" "$localEnv"; then
+          # Value Already Exists
+          continue
+      fi
+    
+      # Full YAML key for YQ
+      yamlPath=".services.${service}${keys[$key]}"
+      # Read any existing value
+      origVal=$(docker compose -f "$argCompose" config --format yaml | yq "$yamlPath" 2>/dev/null || echo "null")
+      # Default Value
+      defaultVal="${res[$key]}"
+
+      if [[ "$origVal" != "null" ]] && [[ -n "$origVal" ]]; then
+        echo "${key}=${origVal}" >> "$localEnv"
+      else
+        echo "${key}=${defaultVal}" >> "$localEnv"
+      fi
+    done
+    unset keys
+    unset res
+  done
+
+  return 0
+}
+
+function action_override() {
+# 1. Pull service names and map them cleanly to their original user
+for service in $(docker compose -f "$argCompose" config --format yaml | yq '.services | keys | .[]'); do
+  # Pull the exact image for this individual service
+  image=$(docker compose -f "$argCompose" config --format yaml | yq ".services.${service}.image")
+  
+  # Run the container user check safely outside yq
+  orig_user=$(sh -c "docker run --rm --entrypoint \"\" $image whoami 2>/dev/null || echo \"root\"" | tr -d '\n\r')
+  
+  # CRITICAL ZSH FIX: Sanitize the service name strictly without adding trailing newlines/underscores
+  # This uses Zsh native parameter expansion to replace characters safely
+  clean_srv="${service//[-]/_}"
+  clean_srv="${clean_srv//[.]/_}"
+  srv_upper="${clean_srv:u}"
+  
+  # Export the env variable matching what yq builds
+  export "${srv_upper}_ORIG_USER"="$orig_user"
+done
+
+# 2. Export your macOS tracker so yq can intercept it via strenv()
+export IS_MAC="$isMac"
+
+# 3. Process transformations entirely wrapped in safe single-quotes
+docker compose -f "$argCompose" config --format yaml | yq '
+  .services |= with_entries(
+    # Safely substitute all dashes and dots globally inside yq
+    (.key | upcase | sub("-", "_") | sub("\.", "_")) as $prefix |
+    
+    # Use Mike Farah native eval syntax to query the environment accurately
+    eval("$" + $prefix + "_ORIG_USER") as $origUser |
+    
+    .value |= (
+      # Base Block: Deploy Constraints
+      {"deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "${" + $prefix + "_CPU_LIMIT}",
+            "memory": "${" + $prefix + "_MEM_LIMIT}"
+          },
+          "reservations": {
+            "cpus": "${" + $prefix + "_CPU_RESERVE}",
+            "memory": "${" + $prefix + "_MEM_RESERVE}"
+          }
+        }
+      }}
+      +
+      # Build Block: Applied ONLY if service has volumes/ports AND user is NOT root
+      (select((has("volumes") or has("ports")) and $origUser != "root") | {"build": {
+        "context": ".",
+        "dockerfile": "local.Dockerfile",
+        "args": {
+          "BASE_IMAGE": .image,
+          "USER_ID": "${HOST_UID}",
+          "GROUP_ID": "${HOST_GID}",
+          "ORIGINAL_USER": $origUser
+        }
+      }} // {})
+      +
+      # Network/Proxy Block: Executed ONLY if NOT running on macOS
+      (select(has("ports") and (strenv(IS_MAC) != "true" and strenv(IS_MAC) != "1")) | 
+        (.ports.target) as $target_port |
+        {
+          "networks": ["${COMPOSE_PROXY}"],
+          "ports": [],
+          "labels": [
+            "caddy=${COMPOSE_HOST}",
+            "caddy.reverse_proxy={{upstreams}} " + $target_port
+          ]
+        } // {})
+    )
+  )
+  |
+  .networks."${COMPOSE_PROXY}" = {"external": true}
+' > "$localCompose"
+
+}
+
+function action_dockerfile() {
+  cat << 'EOF' > "$1"
+# Declare the argument before FROM so it can be used in the FROM line
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG USER_ID
+ARG GROUP_ID
+ARG ORIGINAL_USER
+
+# Switch to Root
+USER root
+
+# Change ID and Group of User, permissions of files
+RUN if [ "$ORIGINAL_USER" != "root" ]; then; \
+    /usr/local/bin/vat-permissions $ORIGINAL_USER "${USER_ID}:${GROUP_ID}"; \
+    fi
+
+# Switch back to original User
+USER ${ORIGINAL_USER}
+EOF
+}
+
+function action_build() {
+  cd "$localDir" &&
+    COMPOSE_ENV_FILES="$argEnv,$localEnv" docker compose up --build &&
+    cd "$cwd"
+}
+
+## endregion ########################################### Defaults
+
+## region ############################################## Argument Handling
+
+read -r flagQ flagV <<< "false false"
+in=()
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    --hostname )     flagHost="$2"; shift           ;;
+    -y | --yes )     flagYes=true;                  ;;     
+    -q | --quiet )   flagQ=true;                    ;;
+    -v | --verbose ) flagV=true;                    ;;
+    -h | --help )    show_help; exit 0              ;;
+    --version )      show_version; exit 0           ;;
+    --* )            show_help; exit "$exitOption"  ;;
+    *)               in+=("$1")                     ;;
+  esac
+  shift
+done
+set -- "${in[@]}"
+readonly flagQ flagV
+
+argCompose="$1"
+argEnv="$2"
+
+[[ -z "$argCompose" ]] && argCompose="$cwd"
+if [[ -d "$argCompose" ]]; then
+  argCompose=$(compose_find "$argCompose")
+  if [[ ! -f "$argCompose" ]]; then
+    echo "No Docker Compose file was found in: $argCompose" | out error
+    exit "$exitArg"
+  fi
+fi
+
+if [[ ! -f $argCompose ]]; then
+  echo "No Docker compose file was found at: $argCompose" | out error
+  exit "$exitArg"
+fi
+
+# Override Files
+localDir=$(dirname "$argCompose")
+localSrv=$(basename "$localDir")
+localCompose="${localDir}/${argCompose:t:r}.override.${argCompose:e}"
+
+# Environment File
+[[ -z "$argEnv" ]] && argEnv="${localDir}/.env"
+localEnv="${localDir}/.${argEnv:e}.local"
+localDockerfile="${localDir}/local.Dockerfile"
+
+# Host
+[[ -z "$flagHost" ]] && flagHost="${COMPOSE_HOST:-"$localSrv.$selfDomain"}"
+
+readonly flagHost argEnv argCompose localSrv localDir localEnv localCompose 
+
+## endregion ########################################### Argument Handling
+
+## region ############################################## Main Execution
+
+KEYCHAIN_PATH="$HOME/Library/Keychains/login.keychain-db"
+echo "Testing Keychain" | spin
+if ! security show-keychain-info "$KEYCHAIN_PATH" > /dev/null 2>&1; then
+  finish false
+  echo ""
+  security -v unlock-keychain "$KEYCHAIN_PATH"
+else
+  finish true
+fi     
+
+# Pre-Pull Images
+if ! echo "Pulling Images" | cronic action_pull; then 
+  exit "$exitPull"
+fi 
+
+if ! echo "Building Env File" | cronic action_env; then
+  exit "$exitEnv"
+fi
+
+if ! echo "Creating Docker Compose Override" | cronic action_override; then
+  exit "$exitOverride"
+fi
+
+if ! echo "Creating Dockerfile Override" | cronic action_dockerfile "$localDockerfile"; then
+  exit "$exitOverride"
+fi
+
+action_build || exit $exitBuild
+
+
+exit 0
+
+## endregion ########################################### Main Execution

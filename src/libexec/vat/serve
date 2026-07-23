@@ -1,0 +1,198 @@
+#!/bin/zsh
+
+# Script to start docker container with docker-compose and custom environment files
+
+# Get the directory where the script is located
+scriptDir="$(cd "$(dirname "$0")" && pwd)"
+cd "$scriptDir"
+
+# Check if docker-compose is available
+if ! command -v docker-compose &> /dev/null && ! command -v docker &> /dev/null; then
+  echo "Error: docker-compose or docker not found"
+  exit 1
+fi
+
+# Get current user's home directory
+userHome="$HOME"
+
+# Create a temporary directory for env files
+tempDir="$(mktemp -d)"
+trap 'rm -rf "$tempDir"' EXIT
+
+# Get the current user's gitconfig path
+gitIgnorePath=""
+gitAttrPath=""
+gitConfigPath="$userHome/.gitconfig"
+
+# Get gitignore path from gitconfig
+if [[ -f "$gitConfigPath" ]]; then
+
+  gitIgnorePath=$(git config --global core.excludesfile 2>/dev/null)
+  if [[ -z "$gitIgnorePath" ]]; then
+    gitIgnorePath="$userHome/.gitignore"
+  fi
+
+  gitAttrPath=$(git config --global core.attributesfile 2>/dev/null)
+  if [[ -z "$gitAttrPath" ]]; then
+    gitAttrPath="$userHome/.gitattributes"
+  fi
+else
+  gitConfigPath=""
+fi
+
+# Create the temporary env file with required variables
+tempEnvFile="$tempDir/.env.runtime"
+> "$tempEnvFile"  # Clear file
+
+# Function to check if a variable exists in a local env file
+variableExists() {
+  local varName="$1"
+  local envFile="$2"
+
+  if [[ -f "$envFile" ]]; then
+    grep -q "^${varName}=" "$envFile" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+declare -a pkgsDkr
+for key in "docker-ce" "docker-ce-cli" "containerd.io" "docker-compose-plugin"; do
+  pkgsDkr+=("$key")
+done
+
+
+# Add variables to temp env file only if they don't exist in local env file
+if [[ -n "$gitConfigPath" ]] && ! variableExists "COMPOSE_GITCONFIG" "$scriptDir/.env"; then
+  echo "COMPOSE_GITCONFIG=$gitConfigPath" >> "$tempEnvFile"
+fi
+
+if [[ -n "$gitIgnorePath" ]] && ! variableExists "COMPOSE_GITIGNORE" "$scriptDir/.env"; then
+  echo "COMPOSE_GITIGNORE=$gitIgnorePath" >> "$tempEnvFile"
+fi
+
+if [[ -n "$gitAttrPath" ]] && ! variableExists "COMPOSE_GITATTRIBUTES" "$scriptDir/.env"; then
+  echo "COMPOSE_GITATTRIBUTES=$gitAttrPath" >> "$tempEnvFile"
+fi
+
+if ! variableExists "COMPOSE_PROXY_KEY" "$scriptDir/.env"; then
+  # Check for id_compose SSH key and generate if not present
+  composeProxyKey="$userHome/.ssh/id_compose"
+  if [[ ! -f "$composeProxyKey" ]]; then
+    echo "Generating SSH key at $composeProxyKey"
+    ssh-keygen -t ed25519 -f "$composeProxyKey" -N ""
+    if [[ $? -ne 0 ]]; then
+      echo "Error: Failed to generate SSH key"
+      exit 1
+    fi
+  fi
+
+  echo "COMPOSE_PROXY_KEY=$composeProxyKey" >> "$tempEnvFile"
+fi
+
+# Add github key path if found and not already in local env
+if ! variableExists "COMPOSE_GITHUB_KEY" "$scriptDir/.env"; then
+  # Find SSH key associated with github.com
+  githubKeyPath=""
+  # Check common SSH config locations for github.com
+  if [[ -f "$userHome/.ssh/config" ]]; then
+    # Look for github.com in SSH config
+    githubKeyPath=$(grep -A 10 -B 10 "github.com" "$userHome/.ssh/config" 2>/dev/null | grep "IdentityFile" | head -1 | awk '{print $2}')
+  fi
+
+  echo "COMPOSE_GITHUB_KEY=$githubKeyPath" >> "$tempEnvFile"
+fi
+
+# Gather all SSH keys from ssh config
+echo "Gathering SSH keys from SSH configuration..."
+if command -v ssh &> /dev/null; then
+  # Use ssh -G to get all configured keys and extract IdentityFile entries
+  sshKeys=($(ssh -G unknown@doesnt.exist 2>/dev/null | awk '$1=="identityfile" {print $2}' | sed "s|^~|$userHome|" | sort -u))
+
+  # Process each key found
+  for keyPath in "${sshKeys[@]}"; do
+    if [[ -f "$keyPath" ]]; then
+      # Extract filename without path and without "id_" prefix
+      filename=$(basename "$keyPath")
+      keyName=""
+
+      # Remove "id_" prefix if present
+      if [[ "$filename" =~ "^id_" ]]; then
+        keyName="${filename#id_}"
+      else
+        keyName="$filename"
+      fi
+
+      # Capitalize the key name
+      keyName=$(echo "$keyName" | sed 's/\(.\)/\U\1/g')
+
+      # Create variable name
+      varName="COMPOSE_${keyName}_KEY"
+
+      # Add to env file if not already present
+      if ! variableExists "$varName" "$scriptDir/.env"; then
+        echo "$varName=$keyPath" >> "$tempEnvFile"
+      fi
+    fi
+  done
+fi
+
+# Create SSH config file for Docker
+sshConfigPath="$userHome/.ssh/config_docker"
+mkdir -p "$(dirname "$sshConfigPath")"
+
+# Create SSH config with specific contents
+cat > "$sshConfigPath" << EOF
+Host host.docker.internal
+    User $USER
+    IdentityFile /run/secrets/proxy_ssh_key
+    StrictHostKeyChecking no
+
+Host *
+    ProxyCommand ssh host.docker.internal -W %h:%p
+
+EOF
+
+# Add github.com entry if we found a github key
+[[ -n "$githubKeyPath" ]] &&
+  cat >> "$sshConfigPath" << EOF
+Host github.com
+    User git
+    IdentityFile /run/secrets/github_ssh_key
+    StrictHostKeyChecking no
+EOF
+
+# Add the SSH config path to the temp env file
+if ! variableExists "COMPOSE_SSHCONFIG" "$scriptDir/.env"; then
+  echo "COMPOSE_SSHCONFIG=$sshConfigPath" >> "$tempEnvFile"
+fi
+
+# Create the docker-compose command with both env files
+echo "Starting docker container with docker-compose..."
+echo "Using env file: $tempEnvFile"
+echo "Using local env file: $scriptDir/.env"
+
+# Check if there's a local .env file
+localEnvFile="$scriptDir/.env"
+if [[ -f "$localEnvFile" ]]; then
+  echo "Local .env file found: $localEnvFile"
+  docker-compose -f docker-compose.yml --env-file "$localEnvFile" --env-file "$tempEnvFile" up -d
+else
+  echo "No local .env file found, using only generated env file"
+  docker-compose -f docker-compose.yml --env-file "$tempEnvFile" up -d
+fi
+
+# Check if docker-compose failed
+if [[ $? -ne 0 ]]; then
+  echo "Error: Failed to start docker container"
+  exit 1
+fi
+
+echo "Docker container started successfully"
+echo "Temporary env file created at: $tempEnvFile"
+echo "SSH config created at: $sshConfigPath"
+echo "SSH key generated at: $composeProxyKey"
+
+# Optional: Display container status
+echo "Container status:"
+docker ps

@@ -1,0 +1,289 @@
+#!/bin/zsh
+
+# @file libexec/vat/serve
+# @brief Stirs ingredients together to build a container image.
+#
+# @flag  --print                           Instead of building, print compiled configuration
+# @flag  --user       <registry user>      Override the registry user to use in tags and/or authentication
+# @flag  --arm64                           Build for arm64 platforms; shortcut for --platforms linux/arm64
+# @flag  --amd64                           Build for amd64 platforms; shortcut for --platforms linux/amd64
+# @flag  --platforms  <platform,platform>  Specify platforms to build for
+# @flag  --tag        <tag>                Override the tag to use when building the image
+# @flag  --var        <var>                Additional variable to add to build string.
+# @flag  --no-cache                        Bypass cached stages when building
+# @flag  --push                            Push image to registry after build completes successfully.
+#
+# @arg  $1  Path to directory containing docker-bake.hcl
+#
+# @exitcode  1   Unknown Error
+# @exitcode  2   Bad Flag
+# @exitcode  5   User cancelled build at confirmation
+# @exitcode  6   No Username Given; Registry requires authentication
+# @exitcode  10  Could not create Docker Buildx builder
+# @exitcode  20  Docker could not build the image. See details
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="Stir Vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1         # Unknown Error
+exitOption=2        # Bad Flag
+exitUserCancel=5    # User cancelled build at confirmation
+exitRegistryUser=6  # No Username Given; Registry requires authentication
+exitBuilder=10      # Could not create Docker Buildx builder
+exitBuildFailed=20  # Docker could not build the image. See details
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+Stirs ingredients together to build a container image.
+
+Usage: $selfName [options] <args>
+
+Arguments:
+  <path>  Path to directory containing docker-bake.hcl
+
+Options:
+  --print                           Instead of building, print compiled configuration
+  --user       <registry user>      Override the registry user to use in tags and/or authentication
+  --arm64                           Build for arm64 platforms; shortcut for --platforms linux/arm64
+  --amd64                           Build for amd64 platforms; shortcut for --platforms linux/amd64
+  --platforms  <platform,platform>  Specify platforms to build for
+  --tag        <tag>                Override the tag to use when building the image
+  --var        <var>                Additional variable to add to build string.
+  --no-cache                        Bypass cached stages when building
+  --push                            Push image to registry after build completes successfully.
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+
+Exit Codes:
+
+  1:   Unknown Error
+  2:   Bad Flag
+  5:   User cancelled build at confirmation
+  6:   No Username Given; Registry requires authentication
+  10:  Could not create Docker Buildx builder
+  20:  Docker could not build the image. See details
+EOF
+
+# Loads and locks standard flags --version, --help --quiet --verbose
+# Easy output coloring with pipes
+# shellcheck source=../../lib/vat/_out.sh
+source "$selfLib/_out.sh"
+
+# shellcheck source=../../lib/vat/_ask.sh
+source "$selfLib/_ask.sh"
+
+# shellcheck source=../../lib/_env.sh
+source "$selfLib/_env.sh"
+
+# shellcheck source=../../lib/_fs.sh
+source "$selfLib/_fs.sh"
+
+# shellcheck source=../../lib/_ssh.sh
+source "$selfLib/_ssh.sh"
+
+read -r flagPrint flagQ flagV flagH flagVer <<< "false false false false false"
+
+tempDir="$(mktemp -d)"
+trap 'rm -rf "$tempDir"' EXIT
+
+isMac=$( [[ $OSTYPE = darwin* ]] && echo true || echo false )
+userHome="$HOME"
+cwd=$(pwd)
+localEnv="$cwd/.env"
+tempEnv="$tempDir/.env"
+declare -A envRun
+declare -A envSh
+declare -A sshKeys
+sshConfigPath="$userHome/.ssh/config_docker"
+
+read -r -d '' sshConfigBase <<EOF
+Host host.docker.internal
+    User $USER
+    IdentityFile /run/secrets/proxy_ssh_key
+
+EOF
+
+read -r -d '' sshConfigProxy <<EOF
+Host *
+    ProxyCommand ssh host.docker.internal -W %h:%p
+
+EOF
+
+read -r -d '' sshConfigGithub <<EOF
+Host github.com
+    IdentityFile /run/secrets/github_ssh_key
+
+EOF
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+function resolve-config() {
+  for path in "$@"; do
+    if [[ -n "$path" && -f "$path" ]]; then
+      echo "$path"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+copy_gitconfig() {
+  local config_file dest_dir dest_path
+
+  config_file="$1"
+  [[ -z "$config_file" ]] && config_file="$userHome/.gitconfig"
+
+  # Check if the config file exists
+  if [[ ! -f "$config_file" ]]; then
+    return 0
+  fi
+
+  if [[ ! -t 0 ]]; then
+    dest_path=$(cat)
+  else
+    dest_path="$dockHome/.gitconfig"
+  fi
+
+  # Create Output
+  dest_dir=$(dirname "$config_file")
+  dest_path="$dest_dir/.gitconfig_container"
+
+  for key in "core.excludesfile" "core.attributesfile" "init.templateDir" "commit.template"; do
+    # Check if the key exists in the file first
+    if git config --file "$dest_path" "$key" &>/dev/null; then
+      current=$(git config --file "$dest_path" "$key")
+
+      # Strip the old directory path and isolate the filename
+      filename=$(basename "$current")
+
+      # Update the path to match the target environment inside the container
+      git config --file "$dest_path" "$key" "/var/www-data/$filename"
+
+      # Copy the actual file (like .gitignore_global) if it exists on the host
+      # Expanded path checks for ~ symbol variations
+      real_path="${current/#\~/$HOME}"
+      if [ -f "$real_path" ]; then
+        cp "$real_path" "$dest_path"
+      fi
+    fi
+  done
+
+  # 3. Strip out local diff, merge, and credential tooling blocks entirely
+  git config --file "$TARGET_GITCONFIG" --remove-section difftool 2>/dev/null || true
+  git config --file "$TARGET_GITCONFIG" --remove-section mergetool 2>/dev/null || true
+  git config --file "$TARGET_GITCONFIG" --remove-section credential 2>/dev/null || true
+
+  # Also strip individual global keys if they were set outside a section block
+  git config --file "$TARGET_GITCONFIG" --unset core.pager 2>/dev/null || true
+}
+
+function set_github() {
+
+  if git config --file "$HOME/.gitconfig" --get-regexp "credential.*github" &>/dev/null; then
+    envSh[COMPOSE_GITHUB_CRED]=true
+  else
+    envSh[COMPOSE_GITHUB_CRED]=true
+  fi
+
+  if [[ -n "$GH_TOKEN" ]]; then
+    envSh[GH_TOKEN]="$GIT_EDITOR"
+  fi
+
+  # Add the GitHub key path if found and not already in local env
+  if ! env::has "COMPOSE_GITHUB_KEY" <<< "$localEnv"; then
+    # Find SSH key associated with github.com
+    envRun[COMPOSE_GITHUB_KEY]=""
+    if [[ -f "$userHome/.ssh/config" ]]; then
+      # Look for github.com in SSH config
+      envRun[COMPOSE_GITHUB_KEY]=$(grep -A 10 -B 10 "github.com" "$userHome/.ssh/config" 2>/dev/null | grep "IdentityFile" | head -1 | awk '{print $2}')
+    fi
+  fi
+}
+
+function action_prep() {
+  local key value
+
+  if ! env::has "COMPOSE_PROXY_KEY" <<< "$localEnv"; then
+    # Check for the id_compose SSH key and generate if not present
+    envRun[COMPOSE_PROXY_KEY]="$userHome/.ssh/id_compose"
+    if [[ ! -f "$composeProxyKey" ]]; then
+      echo "Generating SSH key at $composeProxyKey" | cronic ssh-keygen -t ed25519 -f "$composeProxyKey" -N "" ||
+        return 1
+    fi
+  fi
+
+  if [[ -n "$GIT_EDITOR" ]]; then
+    envSh[GIT_EDITOR]="$GIT_EDITOR"
+  fi
+
+  if [[ -n "$EDITOR" ]]; then
+    envSh[EDITOR]="$EDITOR"
+  fi
+
+  copy_gitconfig "$userHome/opt/host/.gitconfig" <<< "$userHome/.gitconfig"
+  copy_sshconfig "$userHome/opt/host/.ssh/config" <<< "$userHome/.ssh/config"
+
+  set_github
+
+  echo "$sshConfigBase"
+
+  cat > "$sshConfigPath" << EOF
+Host host.docker.internal
+    User $USER
+    IdentityFile /run/secrets/proxy_ssh_key
+    StrictHostKeyChecking no
+
+Host *
+    ProxyCommand ssh host.docker.internal -W %h:%p
+
+EOF
+
+  # Add a github.com entry if we found a github key
+  [[ -n "$githubKeyPath" ]] &&
+    cat >> "$sshConfigPath" << EOF
+Host github.com
+    IdentityFile /run/secrets/github_ssh_key
+EOF
+
+  # Save environment variables
+  for key value in "${(kv)envRun[@]}"; do
+    if ! env::has "$key" <<< "$localEnv"; then
+      env::append "$key" "$value" <<< "$tempEnv"
+    fi
+  done
+
+
+}
+
+
+
+## endregion ########################################### Functions
+
+if $isMac; then
+  userHome="$HOME"
+  composeHome="$userHome/Docker/"
+
+
+
+docker compose -f docker-compose.yml -f docker-compose.dynamic.yml up -d

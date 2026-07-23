@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# @file vat
+# @brief Helps with building, managing, and running Linux containers.
+# 
+# @arg  $1  <stir2|pull2|fork2|kitchen2>  Subcommand
+# 
+# @exitcode  1  Unknown Error
+# @exitcode  2  Bad Flag
+# @exitcode  3  Invalid sub-command
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "$(echo "$selfDir/../lib/$selfFile" | sed '/^\/usr/! s#/\.\./lib/#/lib/#g')" && pwd -P )
+selfName="vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1   # Unknown Error
+exitOption=2  # Bad Flag
+exitSub=3     # Invalid sub-command
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+Helps with building, managing, and running Linux containers.
+
+Usage: $selfFile <stir2|pull2|fork2|kitchen2> <flags> <args>
+
+Subcommands:
+
+  stir2     Stirs ingredients together to build a container image.
+  pull2     Pulls changes from the remote template repo.
+  fork2     
+  kitchen2  Pushes Kitchen Component Installer to Server
+
+For help with an individual subcommand, run:
+  $selfFile <subcommand> --help
+
+Exit Codes:
+
+  1:  Unknown Error
+  2:  Bad Flag
+  3:  Invalid sub-command
+
+EOF
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Routing
+
+sub="$1"
+shift
+case "$sub" in
+  -h | --help )  echo "$selfUsage" && exit 0                     ;;
+  stir | build ) exec "${selfLib/\/lib//libexec}/stir" "$@"     ;;
+  pull  )        exec "${selfLib/\/lib//libexec}/pull2" "$@"     ;;
+  fork | clone ) exec "${selfLib/\/lib//libexec}/fork" "$@"      ;;
+  kitchen2 )     exec "${selfLib/\/lib//libexec}/kitchen2" "$@"  ;;
+esac
+
+echo "$selfUsage" && exit "$exitSub"
+
+## endregion ########################################### Routing
+

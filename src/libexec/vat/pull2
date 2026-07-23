@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# @file libexec/vat/pull2
+# @brief Pulls changes from the remote template repo.
+# 
+# @flag  --upstream     Rebase local changes onto upstream:main branch
+# @flag  --push         Push upstream changes to your remote repo after rebase
+# 
+# @exitcode  1  Unknown Error
+# @exitcode  2  Bad Flag
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="Pull Vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1   # Unknown Error
+exitOption=2  # Bad Flag
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+Pulls changes from the remote template repo.
+
+Usage: $selfName [options] <args>
+
+Arguments:
+
+
+Options:
+  --upstream     Rebase local changes onto upstream:main branch
+  --push         Push upstream changes to your remote repo after rebase
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+
+Exit Codes:
+
+  1:  Unknown Error
+  2:  Bad Flag
+EOF
+
+function _initialize() {
+  selfFlags=("upstream" "push" )
+}
+
+function _resolve() {
+  # Handle any changes to flags or args based on other flags/args
+  return 0
+}
+
+# Loads and locks standard flags --version, --help --quiet --verbose
+# Easy output coloring with pipes
+# shellcheck source=../../lib/vat/_out.sh
+source "$selfLib/_out.sh"
+
+# shellcheck source=../../lib/vat/_in.sh
+source "$selfLib/_in.sh"
+
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+## endregion ########################################### Functions
+
+## region ############################################## Argument Handling
+
+# Handle Positional Argument Handling (IE - $1, $2, etc)
+# (flags values from input arguments are already handled)
+
+
+# Locks Flag Values
+in::finalize
+
+## endregion ########################################### Argument Handling
+
+## region ############################################## Main Code
+
+## endregion ########################################### Main Code

@@ -1,0 +1,186 @@
+#!/bin/bash
+
+# @file libexec/vat/pull
+# @brief null
+#
+# @flag  --upstream     Rebase local changes onto upstream:main branch
+# @flag  --push         Push upstream changes to your remote repo after rebase
+#
+# @exitcode  1  Unknown Error
+# @exitcode  2  Bad Flag
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="Pull Vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1   # Unknown Error
+exitOption=2  # Bad Flag
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+null
+
+Usage: $selfName [options] <args>
+
+Arguments:
+
+
+Options:
+  --upstream     Rebase local changes onto upstream:main branch
+  --push         Push upstream changes to your remote repo after rebase
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+
+Exit Codes:
+
+  1:  Unknown Error
+  2:  Bad Flag
+EOF
+
+function _initialize() {
+  selfFlags=("upstream" "push" )
+}
+
+function _resolve() {
+  # Handle any changes to flags or args based on other flags/args
+  return 0
+}
+
+# Loads and locks standard flags --version, --help --quiet --verbose
+# Easy output coloring with pipes
+# shellcheck source=../../lib/vat/_out.sh
+source "$selfLib/_out.sh"
+
+# shellcheck source=../../lib/vat/_in.sh
+source "$selfLib/_in.sh"
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+function push-force-with-lease() {
+  local status
+  echo "Pushing " | notify
+  cronic git push origin "$currentBranch" --force-with-lease
+  status=$?
+  if [[ $status -eq 0 ]]; then
+    echo "SUCCESS" | success | badge
+  fi
+  return "$status"
+}
+
+function pull-upstream() {
+  local status isPush
+
+  isPush=false
+  [ "$1" == "--push" ] && isPush=true
+
+  echo "Performing Git Operations" | notify
+  cronic git checkout main && \
+    git pull upstream main && \
+    git checkout "$currentBranch" && \
+    git rebase main --autostash
+  status=$?
+  if [[ $status -eq 0 ]]; then
+    echo DONE | success | badge
+    echo ""
+    echo "Successfully rebased ${currentBranch} onto changes from ${upstreamRepo}:main."
+    echo "Any uncommitted changes were automatically stashed and restored."
+    if $isPush || ask "Would you like to push to origin/${currentBranch} now?"; then
+      echo ""
+      if ! push-force-with-lease; then
+        return 1
+      fi
+    else
+      echo ""
+      echo "You can push later with:${RESET} vat push origin ${currentBranch} --force-with-lease"
+      echo ""
+    fi
+    return 0
+  else
+    echo "$HR"
+    echo "⚠️  ${RED}REBASE PAUSED DUE TO CONFLICTS${RESET} ⚠️"
+    echo "$HR"
+    echo "To FIX:   1. Edit the files with conflicts."
+    echo "          2. run 'vat add <file>'"
+    echo "          3. run 'vat rebase --continue'"
+    echo ""
+    echo "To ABORT: run 'vat rebase --abort'"
+    echo "          (This returns ${currentBranch} to its original state)"
+    echo "$HR"
+    return 1
+
+  fi
+  return "$status"
+}
+
+function validate_pull() {
+
+  ! $isGitRepo &&
+    echo "You must run this command from a Git repo!" | error && return 1
+
+  ! $isGitUpstream &&
+    echo "You must initialize your repo by running the command "vat clone" first." | error && return 1
+
+  [ -z "$primaryBranch" ] &&
+    echo "Could not detect primary branch from the GitHub CLI." | error && return 1
+
+  [ "$currentBranch" != "$primaryBranch" ] &&
+    echo "You are on '$currentBranch'; Run this utility from '$primaryBranch'" | err && return 1
+
+  return 0
+}
+
+## endregion ########################################### Functions
+
+## region ############################################## Argument Handling
+
+# Handle Positional Argument Handling (IE - $1, $2, etc)
+# (flags values from input arguments are already handled)
+
+
+# Locks Flag Values
+readonly flagUpstream
+in::finalize
+
+## endregion ########################################### Argument Handling
+
+## region ############################################## Main Code
+
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  isGitRepo=true
+  if git remote | grep -q "upstream"; then
+    isGitUpstream=true
+    primaryBranch=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+    currentBranch=$(git branch --show-current)
+    upstreamUrl=$(git remote get-url upstream)
+    # shellcheck disable=SC2001
+    upstreamRepo=$(echo "$upstreamUrl" | sed 's#https://github.com/##')
+  fi
+fi
+
+if $flagUpstream; then
+  validate_pull || return $?
+  pull-upstream "$@"
+else
+  action_git pull "$@"
+fi
+
+## endregion ########################################### Main Code

@@ -1,0 +1,125 @@
+#!/bin/bash
+
+# @file libexec/vat/fork2
+# @brief null
+# 
+# @flag  --branch  <branch>  Specify the main branch name for your fork.
+# @flag  --owner   <owner>   Owner of the destination repo. Defaults of authenticated GitHub user.
+# @flag  --public            Make the destination repo public
+# 
+# @arg  $1  Name of repo to fork
+# @arg  $2  Name of the directory to fork into
+# 
+# @exitcode  1   Unknown Error
+# @exitcode  2   Bad Flag
+# @exitcode  3   Source Repo Not Given
+# @exitcode  5   Not Logged in to GitHub
+# @exitcode  10  Branch Conflict; Name Not Provided
+# @exitcode  15  User is not Org Owner/Admin
+# @exitcode  20  Authenticated User Does Not Match Specified Owner
+# @exitcode  40  Error while Cloning Source Repo
+# @exitcode  45  Error while Creating Forked Repo
+# @exitcode  50  Error while Configuring Fork
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="Fork Vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1      # Unknown Error
+exitOption=2     # Bad Flag
+exitSource=3     # Source Repo Not Given
+exitOwner=5      # Not Logged in to GitHub
+exitBranch=10    # Branch Conflict; Name Not Provided
+exitOrg=15       # User is not Org Owner/Admin
+exitMismatch=20  # Authenticated User Does Not Match Specified Owner
+exitClone=40     # Error while Cloning Source Repo
+exitCreate=45    # Error while Creating Forked Repo
+exitFork=50      # Error while Configuring Fork
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+null
+
+Usage: $selfName [options] <args>
+
+Arguments:
+  <source>  Name of repo to fork
+  <dest>    Name of the directory to fork into
+
+Options:
+  --branch  <branch>  Specify the main branch name for your fork.
+  --owner   <owner>   Owner of the destination repo. Defaults of authenticated GitHub user.
+  --public            Make the destination repo public
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+
+Exit Codes:
+
+  1:   Unknown Error
+  2:   Bad Flag
+  3:   Source Repo Not Given
+  5:   Not Logged in to GitHub
+  10:  Branch Conflict; Name Not Provided
+  15:  User is not Org Owner/Admin
+  20:  Authenticated User Does Not Match Specified Owner
+  40:  Error while Cloning Source Repo
+  45:  Error while Creating Forked Repo
+  50:  Error while Configuring Fork
+EOF
+
+function _initialize() {
+  selfFlags=("branch:" "owner:" "public" )
+}
+
+function _resolve() {
+  # Handle any changes to flags or args based on other flags/args
+  return 0
+}
+
+# Loads and locks standard flags --version, --help --quiet --verbose
+# Easy output coloring with pipes
+# shellcheck source=../../lib/vat/_out.sh
+source "$selfLib/_out.sh"
+
+# shellcheck source=../../lib/vat/_in.sh
+source "$selfLib/_in.sh"
+
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+## endregion ########################################### Functions
+
+## region ############################################## Argument Handling
+
+# Handle Positional Argument Handling (IE - $1, $2, etc)
+# (flags values from input arguments are already handled)
+argSource="$1"  # Name of repo to fork
+argDest="$2"    # Name of the directory to fork into
+
+# Locks Flag Values
+in::finalize
+
+## endregion ########################################### Argument Handling
+
+## region ############################################## Main Code
+
+## endregion ########################################### Main Code

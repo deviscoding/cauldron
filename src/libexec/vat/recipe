@@ -1,0 +1,510 @@
+#!/bin/zsh
+
+# @file recipe
+# @brief Creates a Vat container recipe
+# 
+# @flag --desc        <name>          Recipe Description                                                   
+# @flag --public                      Make the destination repo public (default: false)                    
+# @flag --owner       <owner>         Owner of the destination repo. Defaults of authenticated GitHub user.
+# @flag --php         <bool>          Set to FALSE to skip PHP and Apache (default: true)                  
+# @flag --local       <target>        Adds a local ingredient target                                       
+# @flag --ext         <name=repo_url> Adds a remote ingredient target (default: {})                        
+# @flag -q, --quiet                   Suppress all output                                                  
+# @flag -v, --verbose                 Enable verbose output                                                
+# @flag -h, --help                    Show this help message and exit.                                     
+# @flag -V, --version                 Display the version of the script.                                   
+# 
+# @arg $1 string Repo Name            
+# @arg $2 string Destination Directory
+# 
+# @exitcode  3 Error Creating Destination                       
+# @exitcode  5 Error Creating Docker Bake Config                
+# @exitcode 10 Error Creating Dockerfile                        
+# @exitcode 15 Not Logged in to GitHub                          
+# @exitcode 20 User is not Org Owner/Admin                      
+# @exitcode 25 Authenticated User Does Not Match Specified Owner
+# @exitcode 45 Error while Creating Repo                        
+#
+# @author
+# @license
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$(cd -- "$(dirname -- "$0")" && pwd -P)
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="recipe"
+selfVer="##VERSION##"
+
+# Exit Codes
+exitDest=3       # Error Creating Destination                       
+exitBake=5       # Error Creating Docker Bake Config                
+exitFile=10      # Error Creating Dockerfile                        
+exitOwner=15     # Not Logged in to GitHub                          
+exitOrg=20       # User is not Org Owner/Admin                      
+exitMismatch=25  # Authenticated User Does Not Match Specified Owner
+exitCreate=45    # Error while Creating Repo                        
+
+# Usage Declaration
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer
+Creates a Vat container recipe
+
+Usage: 
+  $selfName [options] <args>
+
+Arguments:
+   $1 string Repo Name            
+   $2 string Destination Directory
+
+Options:
+   --desc        <name>          Recipe Description                                                   
+   --public                      Make the destination repo public (default: false)                    
+   --owner       <owner>         Owner of the destination repo. Defaults of authenticated GitHub user.
+   --php         <bool>          Set to FALSE to skip PHP and Apache (default: true)                  
+   --local       <target>        Adds a local ingredient target                                       
+   --ext         <name=repo_url> Adds a remote ingredient target (default: {})                        
+   -q, --quiet                   Suppress all output                                                  
+   -v, --verbose                 Enable verbose output                                                
+   -h, --help                    Show this help message and exit.                                     
+   -V, --version                 Display the version of the script.                                   
+
+Exit Codes:
+    3 Error Creating Destination                       
+    5 Error Creating Docker Bake Config                
+   10 Error Creating Dockerfile                        
+   15 Not Logged in to GitHub                          
+   20 User is not Org Owner/Admin                      
+   25 Authenticated User Does Not Match Specified Owner
+   45 Error while Creating Repo                        
+EOF
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+# shellcheck source="../../lib/_style.sh"
+source "$selfLib/../_style.sh"
+
+# @brief Shows Script Version Info
+# @noargs
+function show_version() {
+  if $flagQ; then
+    echo "$selfVer"
+  else
+    echo "$selfName v$selfVer"
+    [[ -n "$selfRepo" ]] && echo "($selfRepo)"
+  fi
+}
+
+# @brief Shows Script Usage Info
+# @noargs
+function show_usage() {
+  if [[ -z "$selfUsage" ]] && ! $flagQ; then
+    show_version
+  elif ! $flagQ; then
+    echo "$selfUsage"
+  fi
+}
+
+# @brief Handle --ext input
+# @noargs
+function handle_flag_ext() {
+  local k v
+  k=$(echo "$2" | awk -F'=' '{print $1}')
+  v=$(echo "$2" | awk -F'=' '{print $2}')
+  jq --arg k "$k" --arg v "$v" '.$k = $v' <<< "$flagExt"
+}
+
+function hcl_local_ext() {
+  cat << EOF
+target "$1" {
+  context    = "./$1"
+  name       = "$1-\${os}"
+  dockerfile = "Dockerfile"
+  matrix     = { os = $2 }
+  platforms  = split(",", PLATFORMS)
+  args = {
+    OS_VERSION = "\${os}"
+  }
+  contexts = {
+    stage-base = "target:stage-base-\${os}"
+  }
+}
+EOF
+}
+
+function hcl_repo_ext() {
+    cat << EOF
+target "$1" {
+  extends = ["$1"]
+}
+EOF
+}
+
+function dockerfile_mount_stage() {
+
+  echo "--mount=type=bind,from=stage-$k,source=/,target=/src/$k \\"
+}
+
+function dockerfile_extensions() {
+  echo "FROM debian:stable-slim"
+  jq -r 'to_entries[] | if .key == (to_entries | map(.key) | first) then "RUN --mount=type=bind,from=stage-\(.key),source=/,target=/src/\(.key) \\" else "    --mount=type=bind,from=stage-\(.key),source=/,target=/src/\(.key) \\" end' <<< "$1"
+  echo "set -e ; \\"
+  echo "echo \"### COPYING EXTENSION EXECUTABLES ###\"; \\"
+  echo "mkdir -p /out; \\"
+  echo "cp -a /src/ssh/* /out/"
+}
+
+function hcl_contexts_extensions() {
+  jq -r 'to_entries[] | "stage-\(.key) = \"target:\(.key)-\${os}\""' <<< "$1"
+}
+
+function hcl_target_more() {
+  jq -r 'to_entries[] | "target \"\(.key)\" {", "    extends = [\"\(.value)\"]", "}", ""' <<< "$1"
+}
+
+function hcl_target_extensions() {
+  local extensions_dockerfile extensions_contexts
+
+  extensions_dockerfile=$(dockerfile_extensions "$@")
+  extensions_contexts=$(hcl_contexts_extensions "$@")
+  cat << EOF
+target "extensions" {
+  name       = "extensions-\${os}"
+  matrix     = { os = $osMatrix }
+  # Define the Dockerfile completely inline
+  dockerfile-inline = <<EOT
+    $extensions_dockerfile
+  EOT
+  contexts = {
+    $extensions_contexts
+  }
+}
+EOF
+}
+
+function hcl_target_args() {
+  local isPhp
+
+  isPhp="${1:-false}"
+  lines=()
+
+  lines+=("args = {")
+  lines+=("    APP_PACKAGES   = join(\" \", APP_PACKAGES)")
+  lines+=("    APP_EXTENSIONS = join(\" \", APP_EXTENSIONS)")
+  lines+=("    OS_VERSION     = OS_VERSION")
+  if $isPhp; then
+    lines+=("    PHP_VERSION    = locals.php_version")
+  fi
+  lines+=("}")
+
+  printf '%s\n' "${lines[@]}"
+}
+
+function hcl_context_vat() {
+  local isPhp
+
+  isPhp="${1:-false}"
+  if $isPhp; then
+    stageVat="target:vat-php\${PHP_VERSION}-\${OS_VERSION}"
+  else
+    stageVat="target:vat-\${OS_VERSION}-slim"
+  fi
+
+  printf "    stage-vat = \"target:%s\"" "$stageVat"
+}
+
+function hcl_context_ext() {
+  local isPhp
+
+  isPhp="${1:-false}"
+  if $isPhp; then
+    stageVat="target:vat-php\${PHP_VERSION}-\${OS_VERSION}"
+  else
+    stageVat="target:vat-\${OS_VERSION}-slim"
+  fi
+  
+  printf "    stage-vat = \"target:%s\"" "$stageVat"
+}
+
+function hcl_variable_string() {
+  local lines type default
+
+  type=$(printf '  type = "%s"' string)
+
+  lines=()
+  lines+=("variable \"$1\" {")
+  lines+=("$type")
+  if [[ -n "$2" ]]; then
+    default=$(printf '  default = "%s"' $2)
+    lines+=("$default")
+  fi
+  lines+=("}")
+
+  printf '%s\n' "${lines[@]}"
+}
+
+function hcl_variable() {
+  local lines type default
+
+  type=$(printf '  type = "%s"' string)
+
+  lines=()
+  lines+=("variable \"$1\" {")
+  lines+=("$type")
+  if [[ -n "$2" ]]; then
+    default=$(printf '  default = %s' $2)
+    lines+=("$default")
+  fi
+  lines+=("}")
+
+  printf '%s\n' "${lines[@]}"
+}
+
+function hcl_variable_list_string() {
+  local lines type default
+
+  type=$(printf '  type = "list(%s)"' string)
+
+  lines=()
+  lines+=("variable \"$1\" {")
+  lines+=("$type")
+  shift
+  defaults=$(jq -n '$ARGS.positional' --args "$@")
+  default=$(printf '  default = %s' "$defaults")
+  lines+=("$default")
+  lines+=("}")
+
+  printf '%s\n' "${lines[@]}"
+}
+
+function hcl_stub() {
+  local extList
+  local varPlatforms varName varTag varReg varOs varPhp 
+  local varExt varPkg targetExt parentStage
+
+  eval "extList=( $(jq -r 'keys | @sh' <<< "$flagExt") )"
+
+  varPlatforms=$(hcl_variable_string PLATFORMS "linux/arm64,linux/amd64")
+  varOs=$(hcl_variable_string "OS_VERSION")
+  parentStage="vat-\${os}-slim"
+  if $flagPhp; then
+    varPhp=$(hcl_variable_string PHP_VERSION)
+    varOs=$(printf "%s\n\n%s" "$varOs" "$varPhp")
+    parentStage="vat-php\${PHP_VERSION}-\${OS_VERSION}"
+  fi
+  varReg=$(hcl_variable_string REGISTRY "$flagRegistry")
+  varOwner=$(hcl_variable_string OWNER "$flagOwner")
+  varName=$(hcl_variable_string NAME "$argName")
+  varTag=$(hcl_variable_string TAG)
+  varExt=$(hcl_variable_list_string APP_EXTENSIONS "${extList[@]}")
+  varPkg=$(hcl_variable_list_string APP_PACKAGES "${flagPkg[@]}")
+  argsTarget=$(hcl_target_args "${flagExt[@]}")
+
+  if [[ $#extList -gt 0 ]]; then
+    targetExt=$(hcl_target_extensions "$flagExt")
+    targetMore=$(hcl_target_more "$flagExt")
+  fi
+
+  cat << EOF
+# docker-bake.hcl
+# Alter this template to meet the needs of your application
+
+# Overridden at Runtime
+$varPlatforms
+
+$varOs
+
+$varName
+
+$varTag
+
+# Defaults
+$varReg
+
+$varOwner
+
+$varExt
+
+$varPkg
+
+group "default" {
+  targets = ["${type}-app"]
+}
+
+$targetMore
+$targetExt
+
+target "${type}-app" {
+  context = "."
+  dockerfile = "Dockerfile"
+  tags = ["\${REGISTRY}/\${USERNAME}/\${NAME}:\${TAG}"]
+
+  $argsTarget
+
+  contexts = {
+    stage-vat = "target:$parentStage"
+    stage-ext = "target:extensions-\${OS_VERSION}"
+  }
+}
+EOF
+}
+
+function dockerfile_stub_php {
+  cat << EOF > "$1"
+FROM stage-vat
+
+ARG APP_EXTENSIONS
+ARG APP_PACKAGES
+ARG PHP_VERSION
+ARG OS_VERSION
+
+USER root
+
+RUN echo "### Application Layer for \${PHP_VERSION}-\${OS_VERSION} ###" && \
+    if [ -n "\$APP_PACKAGES" ]; then \
+    apt-get update && apt-get install -y \$APP_PACKAGES && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*; \
+    fi
+
+RUN --mount=type=bind,from=stage-ext,source=/out,target=/src/ext \
+    set -e; \
+    if [ -n "\$APP_EXTENSIONS" ]; then \
+    echo "### COPYING APP_EXTENSIONS EXECUTABLES ###" && \
+    cp -a /src/ext/* / && \
+    echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
+    /usr/local/sbin/vat-env psalm shfmt shellcheck phpstan php-cs-fixer; \
+    fi
+
+### ADD YOUR CUSTOMIZATIONS BELOW ###
+
+### ADD YOUR CUSTOMIZATIONS ABOVE ###
+
+USER www-data
+EOF
+}
+
+function validate_fork() {
+
+  [[ -z "$argDest" ]] &&
+    echo "You must provide the name of the repo." | out error && return 1
+
+  ! gh auth status >/dev/null 2>&1 &&
+    echo "Error: Not Logged in to GitHub. Run 'vat auth login' first." | out error && return 1
+
+  return 0
+}
+
+## region ############################################## Argument Handling
+
+# Boolean Flag Initial Values
+read -r flagPublic flagQ flagV flagH flagVer <<< "false false false false false"
+
+# String Flag Defaults
+flagDesc=""; flagOwner=""; flagPhp="true"; flagExt="{}"
+
+# Process Flags
+in=()
+while [[ "$1" != "" ]]; do
+  case "$1" in
+    --desc )           flagDesc=$2; shift                                            ;;  
+    --public )         flagPublic=true;                                              ;;  
+    --owner )          flagOwner=$2; shift                                           ;;  
+    --php )            php="$2"; shift; [[ "$php" == false ]] && flagPhp=false       ;;  
+    --local )          flagExt=$(jq --arg k "$2" '.$k = $k' <<< "$flagExt"); shift   ;;  
+    --ext )            flagExt=$(handle_flag_ext "$2"); shift                        ;;  
+    -q | --quiet )     flagQ=true;                                                   ;;  
+    -v | --verbose )   flagV=true;                                                   ;;  
+    -h | --help )      flagH=true;                                                   ;;  
+    -V | --version )   flagVer=true;                                                 ;;  
+    * )                in+=("$1");                                                   ;;  
+  esac
+  shift
+done
+set -- "${in[@]}"
+
+# Lock Values of Boolean Flags
+readonly flagPublic flagQ flagV flagH flagVer
+
+# Set Values of Argument Variables
+argName="${1}" # Repo Name            
+argDir="${2}"  # Destination Directory
+
+## region ############################################## Argument Handling
+
+## region ############################################## Post-Argument Handling
+
+if [[ -n "$argName" ]]; then
+  argDest="$argName"
+  if [[ -n "$argDir" ]]; then
+    if [[ "$argName" == *"/"* ]]; then
+      argDest="$argName"
+      # Check for Owner/flagOwner Conflict
+      if [[ -n "$flagOwner" ]] && [[ $argDest != "$flagOwner/"* ]]; then
+        echo "ERROR: The owner portion of the destination repo does not match the --owner given." | error | out
+        exit 1
+      fi
+      # Split Repo into Owner & Repo
+      IFS='/' read -r flagOwner argName <<< "$argName"
+    fi
+    argDir="$argName"
+  elif [[ "$argName" == *"/"* ]]; then
+    argDest="$argName"
+    argDir=$(echo "$argName" | awk -f'/' '{ print $2 }')
+    flagOwner=$(echo "$argName" | awk -f'/' '{ print $1 }')
+  fi
+fi
+
+# Default $flagOwner to authenticated user if set
+[[ -z "$flagOwner" ]] && flagOwner=$(gh::get::login)
+# Prepend $argDest with $flagOwner to make complete repo
+[[ "$argDir" == "$argDest" && -n "$flagOwner" ]] && argDest="$flagOwner/$argDir"
+
+# Validate All
+! validate_fork && exit $?
+
+# Locks Flag Values
+readonly flagOwner flagPublic
+
+## endregion ########################################### Post Argument Handling
+
+## region ############################################## Main Code
+
+echo "Creating $argDest" | spin
+if ! mkdir -p "$argDest" && cd "$argDest"; then
+  finish false
+  exit "$exitBranch"
+fi
+finish true
+
+# Create the docker-bake.hcl stub
+if ! echo "Creating Docker Bake Config" | cronic hcl_stub; then
+  exit "$exitBake"
+fi
+
+# Create the Dockerfile
+if $flagPhp; then
+  if ! echo "Creating Dockerfile" | cronic dockerfile_stub_php ./Dockerfile; then
+   exit "$exitDockerfile"
+  fi
+else
+  if ! echo "Creating Dockerfile" | cronic dockerfile_stub ./Dockerfile; then
+   exit "$exitDockerfile"
+  fi
+fi
+
+# Create the Repo
+if ! gh::is::repo "$argDest"; then
+  ghFlags=("--source=." "--remote=origin" "--push")
+  $flagPublic || ghFlags+=("--private")
+  if ! echo "Creating Repo: $argDest" | cronic gh repo create "$argDest" "${ghFlags[@]}"; then
+    exit "$exitCreate"
+  fi
+  sleep 2
+fi
+
+## endregion ########################################### Main Code
+

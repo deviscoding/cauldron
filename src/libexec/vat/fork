@@ -1,0 +1,217 @@
+#!/bin/bash
+
+# @file libexec/vat/fork
+# @brief null
+# 
+# @flag  --branch  <branch>  Specify the main branch name for your fork.
+# @flag  --owner   <owner>   Owner of the destination repo. Defaults of authenticated GitHub user.
+# @flag  --public            Make the destination repo public
+# 
+# @arg  $1  Name of repo to fork
+# @arg  $2  Name of the directory to fork into
+# 
+# @exitcode  1  Unknown Error
+# @exitcode  2  Bad Flag
+# @exitcode  3   Source Repo Not Given
+# @exitcode  5   Not Logged in to GitHub
+# @exitcode  10  Branch Conflict; Name Not Provided
+# @exitcode  15  User is not Org Owner/Admin
+# @exitcode  20  Authenticated User Does Not Match Specified Owner
+# @exitcode  40  Error while Cloning Source Repo
+# @exitcode  45  Error while Creating Forked Repo
+# @exitcode  50  Error while Configuring Fork
+#
+# @version ##VERSION##
+# @revision
+# @built
+
+## region ############################################## Command Setup
+
+selfDir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P )
+selfFile=$(basename "${BASH_SOURCE[0]}")
+selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
+selfName="Fork Vat"
+selfRepo=""
+selfVer="##VERSION##"
+
+# Exit Codes
+exitError=1      # Unknown Error
+exitOption=2     # Bad Flag
+exitSource=3     # Source Repo Not Given
+exitOwner=5      # Not Logged in to GitHub
+exitBranch=10    # Branch Conflict; Name Not Provided
+exitOrg=15       # User is not Org Owner/Admin
+exitMismatch=20  # Authenticated User Does Not Match Specified Owner
+exitClone=40     # Error while Cloning Source Repo
+exitCreate=45    # Error while Creating Forked Repo
+exitFork=50      # Error while Configuring Fork
+
+# Usage Declaration
+repoUsage=$(echo "($selfRepo)" | sed 's/()//')
+read -r -d '' selfUsage <<EOF
+$selfName v$selfVer $repoUsage
+null
+
+Usage: $selfName [options] <args>
+
+Arguments:
+  <source>  Name of repo to fork
+  <dest>    Name of the directory to fork into
+
+Options:
+  --branch  <branch>  Specify the main branch name for your fork.
+  --owner   <owner>   Owner of the destination repo. Defaults of authenticated GitHub user.
+  --public            Make the destination repo public
+
+Other Options:
+  -q, --quiet          Suppress all output.
+  -v, --verbose        Enable verbose output.
+  -h, --help           Show this help message and exit.
+  -V, --version        Display the version of the script.
+
+
+Exit Codes:
+
+  1:   Unknown Error
+  2:   Bad Flag
+  3:   Source Repo Not Given
+  5:   Not Logged in to GitHub
+  10:  Branch Conflict; Name Not Provided
+  15:  User is not Org Owner/Admin
+  20:  Authenticated User Does Not Match Specified Owner
+  40:  Error while Cloning Source Repo
+  45:  Error while Creating Forked Repo
+  50:  Error while Configuring Fork
+EOF
+
+function _initialize() {
+  selfFlags=("branch:" "owner:" "public" )
+}
+
+# Loads and locks standard flags --version, --help --quiet --verbose
+# Easy output coloring with pipes
+# shellcheck source=../../lib/vat/_out.sh
+source "$selfLib/_style.sh"
+
+# shellcheck source=../../lib/vat/_in.sh
+source "$selfLib/_in.sh"
+
+# shellcheck source=../../lib/vat/_gh.sh
+source "$selfLib/_gh.sh"
+
+## endregion ########################################### Command Setup
+
+## region ############################################## Functions
+
+function validate_fork() {
+  if [[ -z "$argSrc" ]]; then
+    >&2 echo "You must provide the name of the repo to clone." &&
+      return "$exitSource"
+
+  elif [[ -z "$flagBranch" ]]; then
+    >&2 echo "You must provide the name of your primary branch, which may not be $branchSrc" &&
+      return "$exitBranch"
+
+  elif [[ -z "$flagOwner" ]] && ! gh auth status >/dev/null 2>&1; then
+    >&2 echo "Not Logged in to GitHub. Run 'vat auth login' first." | error &&
+      return "$exitOwner"
+
+  elif gh::is::org "$flagOwner" && ! gh::org::is::admin "$flagOwner"; then
+    >&2 echo "${RED}Authenticated user '$(gh::get::login)' is not an admin or owner of the '$flagOwner' organization.${RESET}" &&
+      return "$exitOrg"
+
+  elif ! gh::is::user "$flagOwner"; then
+    >&2 echo "${RED}Authenticated user '$(gh::get::login)' is not '$flagOwner'." &&
+      return "$exitMismatch"
+  fi
+
+  return 0
+}
+
+## endregion ########################################### Functions
+
+## region ############################################## Argument Handling
+
+# Handle Positional Argument Handling (IE - $1, $2, etc)
+# (flags values from input arguments are already handled)
+argSrc="$1"  # Name of source repo to fork
+argDest="$2" # Name of dest repo & directory
+
+if [[ -n "$argSrc" ]]; then
+  if [[ -n "$argDest" ]]; then
+    if [[ "$argDest" == *"/"* ]]; then
+      # Check for Owner/flagOwner Conflict
+      if [[ -n "$flagOwner" ]] && [[ $argDest != "$flagOwner/"* ]]; then
+        echo "ERROR: The owner portion of the destination repo does not match the --owner given." | error | out
+        exit 1
+      fi
+      # Split Repo into Owner & Repo
+      IFS='/' read -r flagOwner argDir <<< "$argDest"
+    else
+      argDir="$argDest"
+    fi
+  elif [[ "$argSrc" == *"/"* ]]; then
+    argDest=$(echo "$argSrc" | awk -f'/' '{ print $2 }')
+    argDir="$argDest"
+  fi
+fi
+
+# Default $flagOwner to authenticated user if set
+[[ -z "$flagOwner" ]] && flagOwner=$(gh::get::login)
+# Prepend $argDest with $flagOwner to make complete repo
+[[ "$argDir" == "$argDest" && -n "$flagOwner" ]] && argDest="$flagOwner/$argDir"
+
+# Default $flagBranch if Needed
+if [[ -z "$flagBranch" ]]; then
+  branchSrc=$(gh::repo::branch::default "$argSrc")
+  if [[ -n "$branchSrc" ]] && [[ "$branchSrc" != "main" ]]; then
+    flagBranch="main"
+  fi
+fi
+
+# Validate All
+! validate_fork && exit $?
+
+# Locks Flag Values
+readonly flagBranch flagOwner flagPublic
+
+## endregion ########################################### Argument Handling
+
+## region ############################################## Main Code
+
+echo "Repo Clone $argSrc" | notify
+cronic git clone "$argSrc" "$argDir" && cd "$argDir" ||
+  exit "$exitClone"
+echo DONE | success | badge
+
+if ! gh::is::repo "$argDest"; then
+  echo "Repo Creation: $argDest"
+  ghFlags=("--source=." "--remote=origin" "--push")
+  $flagPublic || ghFlags+=("--private")
+  cronic gh repo create "$argDest" "${ghFlags[@]}" ||
+    exit "$exitCreate"
+  sleep 2
+  echo DONE | success | badge
+fi
+
+echo "Fork Configuration" | notify
+cronic git remote rename origin upstream \
+  && git remote add origin "$argDest" \
+  && git remote set-url --push upstream DISABLE \
+  && git push -u origin "$branchSrc" \
+  && git checkout -b "$flagBranch" \
+  && sleep 2 \
+  && git push -u origin "$flagBranch" \
+  && gh repo edit --default-branch "$flagBranch" \
+  && sleep 2 \
+  && git remote set-head origin -a
+status=$?
+if [[ $status -eq 0 ]]; then
+  echo DONE | success | badge
+  exit 0
+else
+  echo ERROR | error | badge
+  exit "$exitFork"
+fi
+
+## endregion ########################################### Main Code
