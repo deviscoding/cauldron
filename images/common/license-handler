@@ -177,7 +177,7 @@ licenseShort=$(lc-license-short "$licenseCheck")
 
 # Create the copyright file
 echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/" > "$outputFile"
-[ -n "$upstreamName" ] && "Upstream-Name: $upstreamName" > "$outputFile"
+[ -n "$upstreamName" ] && echo "Upstream-Name: $upstreamName" > "$outputFile"
 [ -n "$upstreamContact" ] && echo "Upstream-Contact: " > "$outputFile"
 echo "Source: $sourceUrl" > "$outputFile"
 echo "" > "$outputFile"
