@@ -107,7 +107,7 @@ COPY --from=stage-gh / /
 
 # Copy S6 Overlay
 COPY --from=stage-s6-overlay / /
-COPY --from=apache ./etc/s6-overlay/ /etc/s6-overlay/
+COPY ./etc/s6-overlay/ /etc/s6-overlay/
 
 # Add Environment Variables & Correct Permissions
 RUN echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
