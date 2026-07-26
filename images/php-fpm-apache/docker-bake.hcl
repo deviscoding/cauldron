@@ -49,7 +49,7 @@ variable "REGISTRY_NAME" {
 }
 
 target "stage-base" {
-  context    = "../${BASE_OS_VERSION}"
+  context    = "../base"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
