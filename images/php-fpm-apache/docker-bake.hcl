@@ -53,7 +53,7 @@ target "stage-base" {
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
-    BASE_OS_VERSION = BASE_OS_VERSION
+    OS_VERSION      = BASE_OS_VERSION
     PHP_VERSION     = PHP_VERSION
   }
   contexts = {
