@@ -16,7 +16,7 @@ target s6-overlay {
   name       = "s6-overlay-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
-  platforms = split(",", PLATFORMS)
+  platforms  = split(",", PLATFORMS)
 
   args = {
     UPSTREAM_VERSION = S6_OVERLAY_VERSION

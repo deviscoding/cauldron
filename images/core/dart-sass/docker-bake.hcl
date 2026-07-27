@@ -16,7 +16,7 @@ target "dart-sass" {
   context    = "./core/dart-sass"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
-  platforms = split(",", PLATFORMS)
+  platforms  = split(",", PLATFORMS)
 
   args = {
     UPSTREAM_VERSION = SASS_VERSION

@@ -16,7 +16,7 @@ target node {
   name       = "node-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
-  platforms = split(",", PLATFORMS)
+  platforms  = split(",", PLATFORMS)
 
   args = {
     UPSTREAM_VERSION = NODE_VERSION

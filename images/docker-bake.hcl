@@ -20,6 +20,7 @@ variable "OS_VERSION" {
 }
 
 variable "PLATFORMS" {
+  type = string
   default= "linux/arm64,linux/amd64"
 }
 
@@ -51,7 +52,8 @@ target "stage-base" {
   name       = "stage-base-${os}"
   context    = "./base"
   dockerfile = "Dockerfile"
-  platforms  = PLATFORMS
+  platforms = split(",", PLATFORMS)
+
   args = {
     OS_VERSION      = "${os}"
     PHP_VERSION     = "${PHP_MAJOR}.${PHP_MINOR}"
@@ -80,7 +82,8 @@ target "php" {
 
   name       = "vat-php${version}-${os}"
   dockerfile = "Dockerfile"
-  platforms  = PLATFORMS
+  platforms  = split(",", PLATFORMS)
+
   tags = [
     "${resolve_image(IMAGE)}:${TAG}"
   ]

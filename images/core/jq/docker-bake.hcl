@@ -16,7 +16,7 @@ target jq {
   name       = "jq-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
-  platforms = split(",", PLATFORMS)
+  platforms  = split(",", PLATFORMS)
 
   args = {
     UPSTREAM_VERSION = JQ_VERSION

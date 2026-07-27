@@ -21,7 +21,7 @@ target gh {
   name       = "gh-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
-  platforms = split(",", PLATFORMS)
+  platforms  = split(",", PLATFORMS)
 
   args = {
     UPSTREAM_VERSION = GH_VERSION
