@@ -24,11 +24,8 @@ sed -ri 's/^export ([^=]+)=(.*)$/export \1=${\1:-\2}/' "$APACHE_ENVVARS" || exit
 echo "======   End: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
 
 echo "====== Start: ENABLE APACHE CONFIGS ======"
-mv "/var/www/docker-php.conf" "$APACHE_CONFDIR/conf-available/docker-php.conf" && \
-  mv "/var/www/docker-dev.conf" "$APACHE_CONFDIR/conf-available/docker-dev.conf" && \
-  mv "/var/www/docker-mpm-event.conf" "$APACHE_CONFDIR/conf-available/docker-mpm-event.conf" && \
-  a2enconf docker-php && \
-  a2enconf docker-mpm-event && \
-  a2disconf other-vhosts-access-log
+a2enconf docker-php && \
+a2enconf docker-mpm-event && \
+a2disconf other-vhosts-access-log
 echo "======   End: ENABLE APACHE CONFIGS ======"
 exit 0

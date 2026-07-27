@@ -107,9 +107,9 @@ ENV APP_BASE_DIR=/var/www \
 
 
 # These are copied into temporary paths, and must be moved after apache is installed
-COPY --from=apache etc/apache2/conf-available/docker-php.conf "/var/www/docker-php.conf"
-COPY --from=apache etc/apache2/conf-available/docker-dev.conf "/var/www/docker-dev.conf"
-COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "/var/www/docker-mpm-event.conf"
+COPY --from=apache etc/apache2/conf-available/docker-php.conf "${APACHE_CONFDIR}/conf-available/docker-php.conf"
+COPY --from=apache etc/apache2/conf-available/docker-dev.conf "${APACHE_CONFDIR}/conf-available/docker-dev.conf"
+COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "${APACHE_CONFDIR}/conf-available/docker-mpm-event.conf"
 COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
 
 # Copy Configuration Utility
