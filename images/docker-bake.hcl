@@ -20,12 +20,18 @@ variable "OS_VERSION" {
 }
 
 variable "PLATFORMS" {
-  # Define multiple target architectures here
-  default = ["linux/amd64", "linux/arm64"]
+  default= "linux/arm64,linux/amd64"
 }
 
-variable "DOCKERHUB_USER" {
-  default = ""
+# VAT Registry Variables
+variable "REGISTRY" {
+  type    = string
+  default = "docker.io"
+}
+
+variable "USERNAME" {
+  type    = string
+  default = "deviscoding"
 }
 
 variable "TAG" {
@@ -36,13 +42,8 @@ variable "PHP_EXT_INSTALLER_VERSION" {
   default = "2.7.0"
 }
 
-variable "IMAGE_NAME" {
+variable "IMAGE" {
   default = "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache"
-}
-}
-
-variable "REGISTRY_NAME" {
-  default = notequal(DOCKERHUB_USER, "") ? "${DOCKERHUB_USER}/${IMAGE_NAME}" : IMAGE_NAME
 }
 
 target "stage-base" {
@@ -66,6 +67,11 @@ group "default" {
   )
 }
 
+function "resolve_image" {
+  params = [input_image]
+  result = input_image == "" ? "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache" : "${input_image}"
+}
+
 target "php" {
   matrix = {
     version = ["56", "70", "71", "74", "80", "81", "83", "84", "85"]
@@ -75,7 +81,9 @@ target "php" {
   name       = "vat-php${version}-${os}"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
-  tags = ["${REGISTRY_NAME}:${TAG}"]
+  tags = [
+    "${resolve_image(IMAGE)}:${TAG}"
+  ]
   contexts = {
     common = "./common"
     apache = "./apache"
