@@ -21,31 +21,7 @@ echo "====== End: FIXING APACHE DIRECTORIES ======"
 
 echo "====== Start: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
 sed -ri 's/^export ([^=]+)=(.*)$/export \1=${\1:-\2}/' "$APACHE_ENVVARS" || exit 1
-
-# shellcheck disable=SC2016
-echo 'for file in /etc/profile.d/apache-*.sh; do [ -f "$file" ] && . "$file"; done' >> "$APACHE_ENVVARS"
 echo "======   End: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
-
-output_file="$APACHE_CONFDIR/conf-available/$1.conf"
-[ -f "$output_file" ] && echo "" >> "$output_file"
-echo "# Added by vat (from /etc/profile.d/apache-*.sh)" >> "$output_file"
-
-for file in /etc/profile.d/apache-*.sh; do
-  # Check if the file exists
-  if [ -f "$file" ]; then
-    echo "Checking for exports: $file"
-    # Extract exported environment variables using grep and awk
-    export_vars=$(grep -E '^[ \t]*export[ \t]+[A-Za-z0-9_]+\=[^;]*' "$file" | awk '{print $2}' | cut -d'=' -f1)
-
-    # Check if any exported variables were found
-    if [ -n "$export_vars" ]; then
-      for var_name in $export_vars; do
-        echo "PassEnv $var_name" >> "$output_file"
-        echo "  Added 'PassEnv $var_name' to $output_file"
-      done
-    fi
-  fi
-done
 
 echo "====== Start: ENABLE APACHE CONFIGS ======"
 mv "/var/www/docker-php.conf" "$APACHE_CONFDIR/conf-available/docker-php.conf" && \
