@@ -3,11 +3,11 @@
 echo "====== Start: FIXING APACHE DIRECTORIES ======"
 chown -R "$APACHE_RUN_USER":"$APACHE_RUN_GROUP" "$APP_BASE_DIR"
 # shellcheck source=./etc/apache2/envvars.default
-. "$APACHE_ENVVARS"; \
+. "$APACHE_ENVVARS"
 for dir in "$APACHE_LOCK_DIR" "$APACHE_RUN_DIR" "$APACHE_RUN_DIR/socks"; do \
-  rm -rvf "$dir"; \
-    mkdir -p "$dir"; \
-    chown "$APACHE_RUN_USER:$APACHE_RUN_GROUP" "$dir"; \
+  rm -rvf "$dir"
+    mkdir -p "$dir"
+    chown "$APACHE_RUN_USER:$APACHE_RUN_GROUP" "$dir"
     # allow running as an arbitrary user (https://github.com/docker-library/php/issues/743)
     chmod 1777 "$dir"
 done;
