@@ -92,7 +92,7 @@ RUN \
     a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias
 
 # Apache Startup Files
-COPY --chmod=755 docker-php-entrypoint /usr/local/bin/
+COPY --from=apache --chmod=755 docker-php-entrypoint /usr/local/bin/
 
 # install composer from Composer's official Docker image (2.2 is max version for PHP 7.1)
 COPY --from=composer:2.2 --chmod=755 /usr/bin/composer /usr/bin/composer
