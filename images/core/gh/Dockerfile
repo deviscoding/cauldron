@@ -10,6 +10,7 @@ ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTR
 RUN \
   ARCH="${TARGETARCH}" && \
   apt-get update && apt-get install -y --no-install-recommends $GH_PACKAGES /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.deb && \
+  vat-config --exec "gh"  && \
   tar --strip-components=1 -xzpf /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.tar.gz -C "/tmp" && \
   cp -a /tmp/LICENSE "/usr/share/doc/gh" && \
   rm -R /tmp/* && \

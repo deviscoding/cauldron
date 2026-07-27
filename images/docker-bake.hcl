@@ -111,7 +111,7 @@ target "php" {
     S6_DIR                    = S6_DIR
     OS_VERSION                = "${os}"
     PHP_VERSION               = "${substr(version, 0, 1)}.${substr(version, 1,-1)}"
-    PACKAGES_APACHE           = "libfcgi-bin apache2 locales procps git zip openssh-client"
+    PACKAGES_APACHE           = "libfcgi-bin apache2 locales procps git zip openssh-client rsync"
     PHP_EXTENSIONS            = "mysqli opcache pcntl pdo_mysql zip bcmath intl ldap soap mcrypt apcu calendar exif gd imagick sodium"
     REPOSITORY_BUILD_VERSION  = "dev"
     PHP_EXT_INSTALLER_VERSION = PHP_EXT_INSTALLER_VERSION

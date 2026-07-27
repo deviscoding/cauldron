@@ -1,5 +1,12 @@
 #!/command/execlineb -P
-with-contenv
 
+# 1. Create the custom subdirectory in tmpfs
+foreground { mkdir -p /var/run/s6/php_env }
+
+foreground {
+  rsync -a --exclude-from=/etc/s6-overlay/php-env-ignore.txt /var/run/s6/container_environment/ /var/run/s6/php_env/
+}
+
+/command/s6-envdir /var/run/s6/php_env
 s6-notifyoncheck -d
 /usr/local/sbin/php-fpm --nodaemonize

@@ -9,6 +9,7 @@ COPY --chmod 755 extract-node-license /usr/local/sbin/
 COPY --from=builder-node /usr/local/LICENSE /usr/local/share/doc/nodejs/LICENSE
 COPY --from=builder-node /opt /opt
 RUN \
+  vat-config --prefix /opt/node --exec yarn node npm && \
   ln -s "$(find /opt -type f -name LICENSE -print -quit)" /usr/local/share/doc/yarn/LICENSE && \
   /usr/local/sbin/extract-node-license "/usr/local/share/doc/node/LICENSE" "/usr/local/share/doc" && \
   /usr/local/sbin/license-handler "/usr/local/share/doc/yarn/LICENSE" --source "$YARN_URL" \

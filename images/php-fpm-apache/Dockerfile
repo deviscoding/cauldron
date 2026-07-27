@@ -111,7 +111,8 @@ COPY ./etc/s6-overlay/ /etc/s6-overlay/
 
 # Add Environment Variables & Correct Permissions
 RUN echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
-    /usr/local/sbin/vat-env gh sass composer && \
+    /usr/local/sbin/vat-config --exec gh sass composer && \
+    /usr/local/sbin/vat-config --finish && \
     echo "### CORRECTING S6 PERMISSIONS ###" && \
     chmod 755 /etc/s6-overlay/s6-rc.d/*/run && \
     chmod 755 /etc/s6-overlay/s6-rc.d/*/data/check
