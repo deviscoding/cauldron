@@ -19,13 +19,20 @@ chmod 1777 "$APACHE_LOG_DIR"
 rm -rvf /var/www/html/*
 echo "====== End: FIXING APACHE DIRECTORIES ======"
 
-echo "====== Start: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
-sed -ri 's/^export ([^=]+)=(.*)$/export \1=${\1:-\2}/' "$APACHE_ENVVARS" || exit 1
-echo "======   End: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
-
 echo "====== Start: ENABLE APACHE CONFIGS ======"
 a2enconf docker-php && \
 a2enconf docker-mpm-event && \
 a2disconf other-vhosts-access-log
 echo "======   End: ENABLE APACHE CONFIGS ======"
+
+echo "====== Start: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
+sed -ri 's/^export ([^=]+)=(.*)$/: ${\1:=\2}\nexport \1/' "$APACHE_ENVVARS"
+# Add Vat Specific Variables
+echo ": \${APACHE_HTTP:=$APACHE_HTTP}" >> "$APACHE_ENVVARS"
+echo "export APACHE_HTTP" >> "$APACHE_ENVVARS"
+echo ": \${APACHE_HTTPS:=$APACHE_HTTPS}" >> "$APACHE_ENVVARS"
+echo "export APACHE_HTTPS" >> "$APACHE_ENVVARS"
+# Ensure there are no trailing spaces or hidden characters
+sed -i 's/[[:space:]]*$//' "$APACHE_ENVVARS"
+echo "======   End: ALLOW ${APACHE_ENVVARS} EXPORT OVERRIDES & IMPORT ======"
 exit 0
