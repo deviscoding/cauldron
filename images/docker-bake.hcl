@@ -62,7 +62,7 @@ target "stage-base" {
 }
 
 target "stage-jq" {
-  context    = "./jq"
+  context    = "./core/jq"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   contexts = {
@@ -71,7 +71,7 @@ target "stage-jq" {
 }
 
 target "stage-gh" {
-  context    = "./gh"
+  context    = ".core/gh"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
@@ -83,7 +83,7 @@ target "stage-gh" {
 }
 
 target "stage-dart-sass" {
-  context    = "./dart-sass"
+  context    = "./core/dart-sass"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
@@ -95,7 +95,7 @@ target "stage-dart-sass" {
 }
 
 target "stage-s6-overlay" {
-  context   = "../s6-overlay"
+  context   = "./core/s6-overlay"
   platforms = PLATFORMS
   args = {
     S6_OVERLAY_VERSION = S6_OVERLAY_VERSION
