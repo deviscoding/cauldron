@@ -1,8 +1,10 @@
 # ./dart-sass/docker-bake.hcl
 
-variable "PLATFORMS" {
-  default = "linux/arm64,linux/amd64"
+variable "OS_MATRIX" {
+  type = list(string)
 }
+
+variable "PLATFORMS" {}
 
 variable "SASS_VERSION" {
   default = "1.77.1"
@@ -13,7 +15,7 @@ target "dart-sass" {
   name       = "dart-sass-${os}"
   context    = "./core/dart-sass"
   dockerfile = "Dockerfile"
-  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  matrix     = { os = OS_MATRIX }
   platforms = split(",", PLATFORMS)
 
   args = {

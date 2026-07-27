@@ -1,8 +1,10 @@
 # ./yq/docker-bake.hcl
 
-variable "PLATFORMS" {
-  default = "linux/arm64,linux/amd64"
+variable "OS_MATRIX" {
+  type = list(string)
 }
+
+variable "PLATFORMS" {}
 
 variable "YQ_VERSION" {
   default = "latest"
@@ -14,7 +16,7 @@ target "yq" {
   context    = "./core/yq"
   name       = "yq-${os}"
   dockerfile = "Dockerfile"
-  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  matrix     = { os = OS_MATRIX }
   platforms  = split(",", PLATFORMS)
 
   args = {

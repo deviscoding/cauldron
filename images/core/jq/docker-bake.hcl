@@ -1,8 +1,10 @@
 # ./jq/docker-bake.hcl
 
-variable "PLATFORMS" {
-  default = "linux/arm64,linux/amd64"
+variable "OS_MATRIX" {
+  type = list(string)
 }
+
+variable "PLATFORMS" {}
 
 variable "JQ_VERSION" {
   default = "1.7.1"
@@ -13,7 +15,7 @@ target jq {
   context    = "./core/jq"
   name       = "jq-${os}"
   dockerfile = "Dockerfile"
-  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  matrix     = { os = OS_MATRIX }
   platforms = split(",", PLATFORMS)
 
   args = {

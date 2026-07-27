@@ -1,3 +1,8 @@
+variable "OS_MATRIX" {
+  type = list(string)
+  default = ["jessie", "stretch", "bookworm", "bullseye", "trixie"]
+}
+
 variable "PLATFORMS" {
   # Define multiple target architectures here
   default = ["linux/amd64", "linux/arm64"]
@@ -32,11 +37,13 @@ variable "REGISTRY_NAME" {
 }
 
 target "stage-base" {
+  matrix     = { os = OS_MATRIX }
+  name       = "stage-base-${os}"
   context    = "./base"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
-    OS_VERSION      = OS_VERSION
+    OS_VERSION      = "${os}"
     PHP_VERSION     = PHP_VERSION
   }
   contexts = {
@@ -45,6 +52,10 @@ target "stage-base" {
 }
 
 target "php70-fpm-apache" {
+  matrix = {
+    version = ["56", "70", "71", "74", "80", "81", "83", "84", "85"]
+    os      = OS_MATRIX
+  }
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   tags = ["${REGISTRY_NAME}:${TAG}"]

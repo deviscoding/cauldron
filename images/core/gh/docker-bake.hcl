@@ -1,5 +1,9 @@
 # ./gh/docker-bake.hcl
 
+variable "OS_MATRIX" {
+  type = list(string)
+}
+
 variable "PLATFORMS" {}
 
 variable "GH_VERSION" {
@@ -16,7 +20,7 @@ target gh {
   context    = "./core/gh"
   name       = "gh-${os}"
   dockerfile = "Dockerfile"
-  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  matrix     = { os = OS_MATRIX }
   platforms = split(",", PLATFORMS)
 
   args = {

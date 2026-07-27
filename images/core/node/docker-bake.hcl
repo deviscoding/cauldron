@@ -1,8 +1,10 @@
 # ./node/docker-bake.hcl
 
-variable "PLATFORMS" {
-  default = "linux/arm64,linux/amd64"
+variable "OS_MATRIX" {
+  type = list(string)
 }
+
+variable "PLATFORMS" {}
 
 variable "NODE_VERSION" {
   default = "24"
@@ -13,7 +15,7 @@ target node {
   context    = "./core/node"
   name       = "node-${os}"
   dockerfile = "Dockerfile"
-  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  matrix     = { os = OS_MATRIX }
   platforms = split(",", PLATFORMS)
 
   args = {
