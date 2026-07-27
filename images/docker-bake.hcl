@@ -60,11 +60,19 @@ target "stage-base" {
   }
 }
 
-target "php70-fpm-apache" {
+group "default" {
+  targets = (PHP_MAJOR != "" && OS_VERSION != "") ? ["php-target"] : (
+  (PHP_MAJOR == "" && OS_VERSION == "") ? ["php"] : ["os-target"]
+  )
+}
+
+target "php" {
   matrix = {
     version = ["56", "70", "71", "74", "80", "81", "83", "84", "85"]
     os      = OS_MATRIX
   }
+
+  name       = "vat-php${version}-${os}"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   tags = ["${REGISTRY_NAME}:${TAG}"]
@@ -87,4 +95,8 @@ target "php70-fpm-apache" {
     REPOSITORY_BUILD_VERSION  = "dev"
     PHP_EXT_INSTALLER_VERSION = PHP_EXT_INSTALLER_VERSION
   }
+}
+
+target "php-target" {
+  inherits = ["vat-php${PHP_MAJOR}${PHP_MINOR}-${OS_VERSION}"]
 }
