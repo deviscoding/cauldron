@@ -14,7 +14,7 @@ done;
 
 mkdir -p "$APACHE_LOG_DIR"
 chown -R --no-dereference "$APACHE_RUN_USER:$APACHE_RUN_GROUP" "$APACHE_LOG_DIR"
-chmod 1777 "$dir"
+chmod 1777 "$APACHE_LOG_DIR"
 # delete the "index.html" that installing Apache drops in here
 rm -rvf /var/www/html/*
 echo "====== End: FIXING APACHE DIRECTORIES ======"
