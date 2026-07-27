@@ -36,6 +36,7 @@ variable "USERNAME" {
 }
 
 variable "TAG" {
+  type    = string
   default = "latest"
 }
 
@@ -44,6 +45,7 @@ variable "PHP_EXT_INSTALLER_VERSION" {
 }
 
 variable "IMAGE" {
+  type    = string
   default = "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache"
 }
 
