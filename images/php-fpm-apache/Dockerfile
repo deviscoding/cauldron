@@ -102,22 +102,10 @@ COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/local/bin/vat-entrypoint
 # install composer from Composer's official Docker image (2.2 is max version for PHP 7.1)
 COPY --from=composer:2.2 --chmod=755 /usr/bin/composer /usr/bin/composer
 
-# Copy Dart Sass
-COPY --from=stage-dart-sass / /
-
-# Copy JQ
-COPY --from=stage-jq / /
-
-# Copy GH-CLI
-COPY --from=stage-gh / /
-
-# Copy S6 Overlay
-COPY --from=stage-s6-overlay / /
-COPY ./etc/s6-overlay/ /etc/s6-overlay/
-
 # Add Environment Variables & Correct Permissions
-RUN echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
-    /usr/local/sbin/vat-config --exec gh sass composer && \
+RUN --mount=type=bind,from=stage-plugins,source=/out,target=/src/plugins \
+    echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
+    /usr/local/sbin/vat-config --exec git curl zip composer && \
     /usr/local/sbin/vat-config --finish && \
     echo "### CORRECTING S6 PERMISSIONS ###" && \
     chmod 755 /etc/s6-overlay/s6-rc.d/*/run && \

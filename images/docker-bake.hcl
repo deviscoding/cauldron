@@ -1,3 +1,10 @@
+target "_vat" {
+  context = "."
+  labels = {
+    "org.vat.plugin.s6-overlay" = "vat://s6-overlay"
+  }
+}
+
 variable "OS_MATRIX" {
   type = list(string)
   default = ["jessie", "stretch", "bookworm", "bullseye", "trixie"]
@@ -97,19 +104,14 @@ target "php" {
   tags = [
     "${resolve_image(IMAGE)}:${TAG}"
   ]
+  
   contexts = {
     common           = "${VAT_DIR}/common"
     apache           = "${VAT_DIR}/apache"
     php              = "${VAT_DIR}/php"
-    stage-base       = "target:stage-base"
-    stage-gh         = "target:stage-gh"
-    stage-jq         = "target:stage-jq"
-    stage-dart-sass  = "target:stage-dart-sass"
-    stage-s6-overlay = "target:stage-s6-overlay"
   }
 
   args = {
-    S6_DIR                    = S6_DIR
     HEALTHCHECK_SILENCE       = parseint(version, 10) >= 82 ? "modern" : "legacy"
     OS_VERSION                = "${os}"
     PHP_VERSION               = "${substr(version, 0, 1)}.${substr(version, 1,-1)}"
