@@ -11,7 +11,7 @@ variable "TAG" {
   default = "latest"
 }
 
-variable "BASE_OS_VERSION" {
+variable "OS_VERSION" {
   default = "stretch"
 }
 
@@ -36,7 +36,7 @@ target "stage-base" {
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
-    OS_VERSION      = BASE_OS_VERSION
+    OS_VERSION      = OS_VERSION
     PHP_VERSION     = PHP_VERSION
   }
   contexts = {
