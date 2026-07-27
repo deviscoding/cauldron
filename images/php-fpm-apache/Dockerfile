@@ -4,10 +4,10 @@ ARG OS_VERSION
 FROM stage-base
 
 ARG S6_DIR='/opt/s6'
-ARG PACKAGES_APACHE='libfcgi-bin apache2 locales procps git zip openssh-client jq'
-ARG PHP_EXTENSIONS='mysqli opcache pcntl pdo_mysql zip bcmath intl ldap soap mcrypt apcu calendar exif gd imagick sodium'
-ARG REPOSITORY_BUILD_VERSION='dev'
-ARG PHP_EXT_INSTALLER_VERSION='2.7.0'
+ARG PACKAGES
+ARG PHP_EXTENSIONS
+ARG PHP_EXT_INSTALLER_VERSION
+ARG COMPOSER_VERSION=2.2
 ARG HEALTHCHECK_SILENCE
 
 #
@@ -68,14 +68,14 @@ ENV PHP_DATE_TIMEZONE="America/Chicago" \
 # Composer & PHP tools
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
-    COMPOSER_HOME=/composer \
+    COMPOSER_HOME=/var/www/.composer \
     COMPOSER_MAX_PARALLEL_HTTP=24
 
 #
 # Other Values
 #
 
-ENV APP_BASE_DIR=/var/www/html \
+ENV APP_BASE_DIR=/var/www \
     CONTAINER_ENV="prod" \
     DISABLE_DEFAULT_CONFIG=false \
     HEALTHCHECK_PATH="/healthcheck" \
