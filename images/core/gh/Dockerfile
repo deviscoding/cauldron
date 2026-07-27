@@ -13,7 +13,7 @@ RUN \
   tar --strip-components=1 -xzpf /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.tar.gz -C "/tmp" && \
   cp -a /tmp/LICENSE "/usr/share/doc/gh" && \
   rm -R /tmp/* && \
-  /usr/local/sbin/license-handler "/usr/share/doc/gh/LICENSE" --source "${S6_URL}" --files "$S6_FILES" --output "/usr/share/doc/gh/copyright"
+  /usr/local/sbin/license-handler "/usr/share/doc/gh/LICENSE" --source "${S6_URL}" --files "/usr/bin/gh" --output "/usr/share/doc/gh/copyright"
 
 FROM scratch
 COPY --chmod=755 --from=builder-gh /usr/bin/gh /usr/bin/gh
