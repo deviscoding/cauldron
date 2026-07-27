@@ -53,7 +53,11 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     PHP_REALPATH_CACHE_TTL=600 \
     PHP_SESSION_COOKIE_SECURE=false \
     PHP_UPLOAD_MAX_FILE_SIZE="100M" \
-    SHOW_WELCOME_MESSAGE=true
+
+# These are for reference to apps only; they are the external ports for the container, not internal ones!
+ENV COMPOSE_HTTP=8080 \
+    COMPOSE_HTTPS=8443 \
+    COMPOSE_HOST="localhost"
 
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/$PHP_EXT_INSTALLER_VERSION/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/v0.5.0/php-fpm-healthcheck /usr/local/bin/
@@ -62,6 +66,7 @@ ADD --chmod=0755 https://raw.githubusercontent.com/renatomefi/php-fpm-healthchec
 COPY --from=apache etc/apache2/conf-available/docker-php.conf "/var/www/docker-php.conf"
 COPY --from=apache etc/apache2/conf-available/docker-dev.conf "/var/www/docker-dev.conf"
 COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "/var/www/docker-mpm-event.conf"
+COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
 
 # Copy php.ini and php-fpm config
 COPY --from=php usr/local/etc/php/php.ini /usr/local/etc/php/
@@ -126,9 +131,9 @@ STOPSIGNAL SIGQUIT
 
 WORKDIR ${APP_BASE_DIR}
 
-EXPOSE 80 443
+EXPOSE 8080 8443
 
 CMD ["/init"]
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 \
-    CMD [ "sh", "-c", "curl --insecure --silent --location --show-error --fail http://localhost:80$HEALTHCHECK_PATH || exit 1" ]
+    CMD [ "sh", "-c", "curl --insecure --silent --location --show-error --fail http://localhost:${APACHE_HTTP}${HEALTHCHECK_PATH} || exit 1" ]
