@@ -92,7 +92,7 @@ RUN \
     a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias
 
 # Apache Startup Files
-COPY --from=apache --chmod=755 docker-php-entrypoint /usr/local/bin/
+COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/local/bin/vat-entrypoint
 
 # install composer from Composer's official Docker image (2.2 is max version for PHP 7.1)
 COPY --from=composer:2.2 --chmod=755 /usr/bin/composer /usr/bin/composer
@@ -118,7 +118,7 @@ RUN echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
     chmod 755 /etc/s6-overlay/s6-rc.d/*/run && \
     chmod 755 /etc/s6-overlay/s6-rc.d/*/data/check
 
-ENTRYPOINT ["docker-php-entrypoint"]
+ENTRYPOINT ["vat-entrypoint"]
 
 # Set stop signal to SIGQUIT for a graceful shutdown
 # (https://github.com/just-containers/s6-overlay/issues/586)
