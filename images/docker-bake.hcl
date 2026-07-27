@@ -83,6 +83,7 @@ target "php" {
   }
 
   name       = "vat-php${version}-${os}"
+  context    = "./php-fpm-apache"
   dockerfile = "Dockerfile"
   platforms  = split(",", PLATFORMS)
 
