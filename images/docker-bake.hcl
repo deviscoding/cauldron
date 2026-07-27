@@ -177,6 +177,7 @@ target "php" {
     apache           = "${VAT_DIR}/apache"
     php              = "${VAT_DIR}/php"
     stage-base       = "target:stage-base-${os}"
+    stage-composer   = "docker-image://composer:${int(version) <= 71 ? "2.2" : "latest"}"
   }
 
   args = {

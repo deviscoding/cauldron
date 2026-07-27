@@ -7,7 +7,7 @@ ARG S6_DIR='/opt/s6'
 ARG PACKAGES
 ARG PHP_EXTENSIONS
 ARG PHP_EXT_INSTALLER_VERSION
-ARG COMPOSER_VERSION=2.2
+ARG COMPOSER_VERSION
 ARG HEALTHCHECK_SILENCE
 
 #
@@ -92,6 +92,9 @@ ENV COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_HOME=/var/www/.composer \
     COMPOSER_MAX_PARALLEL_HTTP=24
 
+COPY --from=stage-composer --chmod=755 /usr/bin/composer /usr/local/bin/composer
+RUN mkdir -p "$COMPOSER_HOME" && chown -R www-data:www-data "${COMPOSER_HOME}"
+
 #
 # Other Values
 #
@@ -122,9 +125,6 @@ RUN \
 
 # Apache Startup Files
 COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/local/bin/vat-entrypoint
-
-# install composer from Composer's official Docker image (2.2 is max version for PHP 7.1)
-COPY --from=composer:2.2 --chmod=755 /usr/bin/composer /usr/bin/composer
 
 # Add Environment Variables & Correct Permissions
 RUN --mount=type=bind,from=stage-plugins,source=/out,target=/src/plugins \
