@@ -49,7 +49,7 @@ variable "REGISTRY_NAME" {
 }
 
 target "stage-base" {
-  context    = "../base"
+  context    = "./base"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
@@ -57,12 +57,12 @@ target "stage-base" {
     PHP_VERSION     = PHP_VERSION
   }
   contexts = {
-    common = "../common"
+    common = "./common"
   }
 }
 
 target "stage-jq" {
-  context    = "../jq"
+  context    = "./jq"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   contexts = {
@@ -71,7 +71,7 @@ target "stage-jq" {
 }
 
 target "stage-gh" {
-  context    = "../gh"
+  context    = "./gh"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
@@ -83,7 +83,7 @@ target "stage-gh" {
 }
 
 target "stage-dart-sass" {
-  context    = "../dart-sass"
+  context    = "./dart-sass"
   dockerfile = "Dockerfile"
   platforms  = PLATFORMS
   args = {
@@ -102,7 +102,7 @@ target "stage-s6-overlay" {
     S6_DIR             = S6_DIR
   }
   contexts = {
-    common = "../common"
+    common = "./common"
     stage-base = "target:stage-base"
   }
 }
@@ -112,9 +112,9 @@ target "php70-fpm-apache" {
   platforms  = PLATFORMS
   tags = ["${REGISTRY_NAME}:${TAG}"]
   contexts = {
-    common = "../common"
-    apache = "../apache"
-    php    = "../php"
+    common = "./common"
+    apache = "./apache"
+    php    = "./php"
     stage-base       = "target:stage-base"
     stage-gh         = "target:stage-gh"
     stage-jq         = "target:stage-jq"
