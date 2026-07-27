@@ -1,0 +1,28 @@
+# ./node/docker-bake.hcl
+
+variable "PLATFORMS" {
+  default = "linux/arm64,linux/amd64"
+}
+
+variable "NODE_VERSION" {
+  default = "24"
+}
+
+target node {
+  # Context is relative to where you execute the bake command (the root)
+  context    = "./core/node"
+  name       = "node-${os}"
+  dockerfile = "Dockerfile"
+  matrix     = { os = ["jessie", "stretch", "bookworm", "bullseye", "trixie"] }
+  platforms = split(",", PLATFORMS)
+
+  args = {
+    UPSTREAM_VERSION = NODE_VERSION
+  }
+
+  # Feeds the correct matrixed target (stage-base-bookworm, etc.) into the Dockerfile context
+  contexts = {
+    stage-base = "target:stage-base-${os}"
+    builder-node = "docker-image://node:${NODE_VERSION}"
+  }
+}

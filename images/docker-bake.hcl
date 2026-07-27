@@ -15,29 +15,12 @@ variable "BASE_OS_VERSION" {
   default = "stretch"
 }
 
-variable "GH_VERSION" {
-  default = "2.49.2"
-}
-
-variable "SASS_VERSION" {
-  default = "1.77.1"
-}
-
 variable "PHP_VERSION" {
   default = "7.0.33"
 }
 
-
 variable "PHP_EXT_INSTALLER_VERSION" {
   default = "2.7.0"
-}
-
-variable "S6_OVERLAY_VERSION" {
-  default = "3.2.0.2"
-}
-
-variable "S6_DIR" {
-  default = "/opt/s6"
 }
 
 variable "IMAGE_NAME" {
@@ -58,52 +41,6 @@ target "stage-base" {
   }
   contexts = {
     common = "./common"
-  }
-}
-
-target "stage-jq" {
-  context    = "./core/jq"
-  dockerfile = "Dockerfile"
-  platforms  = PLATFORMS
-  contexts = {
-    stage-base = "target:stage-base"
-  }
-}
-
-target "stage-gh" {
-  context    = ".core/gh"
-  dockerfile = "Dockerfile"
-  platforms  = PLATFORMS
-  args = {
-    UPSTREAM_VERSION = GH_VERSION
-  }
-  contexts = {
-    stage-base = "target:stage-base"
-  }
-}
-
-target "stage-dart-sass" {
-  context    = "./core/dart-sass"
-  dockerfile = "Dockerfile"
-  platforms  = PLATFORMS
-  args = {
-    UPSTREAM_VERSION = "1.77.1"
-  }
-  contexts = {
-    stage-base = "target:stage-base"
-  }
-}
-
-target "stage-s6-overlay" {
-  context   = "./core/s6-overlay"
-  platforms = PLATFORMS
-  args = {
-    S6_OVERLAY_VERSION = S6_OVERLAY_VERSION
-    S6_DIR             = S6_DIR
-  }
-  contexts = {
-    common = "./common"
-    stage-base = "target:stage-base"
   }
 }
 

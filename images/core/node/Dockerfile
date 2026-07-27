@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-ARG UPSTREAM_VERSION=24
+ARG UPSTREAM_VERSION
 ARG TARGETARCH
 FROM node:${UPSTREAM_VERSION} as builder-node
 

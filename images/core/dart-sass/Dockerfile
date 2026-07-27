@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 FROM stage-base as builder-sass
-ARG UPSTREAM_VERSION=1.77.1
+ARG UPSTREAM_VERSION
 ARG TARGETARCH
 ARG SASS_DIR="/opt/dart-sass"
 ARG SASS_LICENSE="${SASS_DIR}/usr/bin/src/LICENSE"

@@ -2,14 +2,14 @@
 FROM stage-base as builder-gh
 ARG UPSTREAM_VERSION=2.49.2
 ARG TARGETARCH
-ARG PACKAGES_GH='apt-utils'
+ARG GH_PACKAGES='apt-utils'
 ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTREAM_VERSION}_linux_arm64.deb /opt/
 ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTREAM_VERSION}_linux_amd64.deb /opt/
 ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTREAM_VERSION}_linux_amd64.tar.gz /opt/
 ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTREAM_VERSION}_linux_arm64.tar.gz /opt/
 RUN \
   ARCH="${TARGETARCH}" && \
-  apt-get update && apt-get install -y --no-install-recommends $PACKAGES_GH /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.deb && \
+  apt-get update && apt-get install -y --no-install-recommends $GH_PACKAGES /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.deb && \
   tar --strip-components=1 -xzpf /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.tar.gz -C "/tmp" && \
   cp -a /tmp/LICENSE "/usr/share/doc/gh" && \
   rm -R /tmp/* && \
