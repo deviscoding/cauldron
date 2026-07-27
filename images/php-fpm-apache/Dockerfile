@@ -11,6 +11,19 @@ ARG COMPOSER_VERSION=2.2
 ARG HEALTHCHECK_SILENCE
 
 #
+# Global Dependency Installation
+#
+RUN echo "### Base Layer for PHP Version: ${PHP_VERSION} ###" && \
+    apt-get update && vat-apt-get install -y --no-install-recommends $PACKAGES && \
+    rm -rf /tmp/* /var/tmp/* && \
+    locale-gen en_US.UTF-8 en_US es_MX.UTF-8 es_MX
+
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/$PHP_EXT_INSTALLER_VERSION/install-php-extensions /usr/local/bin/
+ADD --chmod=0755 https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/v0.5.0/php-fpm-healthcheck /usr/local/bin/
+
+RUN IPE_GD_WITHOUTAVIF=1 install-php-extensions ${PHP_EXTENSIONS}
+
+#
 # Apache Configuration
 #
 
@@ -65,7 +78,15 @@ ENV PHP_DATE_TIMEZONE="America/Chicago" \
     PHP_SESSION_COOKIE_SECURE=false \
     PHP_UPLOAD_MAX_FILE_SIZE="100M"
 
-# Composer & PHP tools
+COPY etc/s6-overlay/ /etc/s6-overlay/
+COPY --from=php usr/local/etc/php/php.ini /usr/local/etc/php/
+COPY usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/zz-docker.conf
+COPY usr/local/etc/php-fpm.d/zz-silence-health-${HEALTHCHECK_SILENCE}.conf /usr/local/etc/php-fpm.d/zz-silence-health.conf
+RUN chown www-data:www-data /usr/local/etc/php/php.ini /usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/zz-silence-health.conf
+
+#
+# Composer & PHP Tools
+#
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_HOME=/var/www/.composer \
@@ -81,8 +102,6 @@ ENV APP_BASE_DIR=/var/www \
     HEALTHCHECK_PATH="/healthcheck" \
     LOG_OUTPUT_LEVEL=warn
 
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/$PHP_EXT_INSTALLER_VERSION/install-php-extensions /usr/local/bin/
-ADD --chmod=0755 https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/v0.5.0/php-fpm-healthcheck /usr/local/bin/
 
 # These are copied into temporary paths, and must be moved after apache is installed
 COPY --from=apache etc/apache2/conf-available/docker-php.conf "/var/www/docker-php.conf"
@@ -90,31 +109,14 @@ COPY --from=apache etc/apache2/conf-available/docker-dev.conf "/var/www/docker-d
 COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "/var/www/docker-mpm-event.conf"
 COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
 
-# Copy php.ini and php-fpm config
-COPY --from=php usr/local/etc/php/php.ini /usr/local/etc/php/
-COPY usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/
-COPY usr/local/etc/php-fpm.d/zz-silence-health-${HEALTHCHECK_SILENCE}.conf /usr/local/etc/php-fpm.d/zz-silence-health.conf
-
 # Copy Configuration Utility
 COPY --chmod=0755 --from=apache ./usr/local/sbin/suggest-config /usr/local/sbin/suggest-config
 
 # apache, other dependencies, pecl extensions, and clean up
-RUN echo "Installing: $PACKAGES_APACHE" && \
-    apt-get update && apt-get install -y $PACKAGES_APACHE && apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-    \
-    # generate locales we will likely use \
-    locale-gen en_US.UTF-8 && locale-gen en_US && \
-    locale-gen es_MX.UTF-8 && locale-gen es_MX && \
-    \
+RUN \
     # Ensure /var/www/ has the correct permissions \
     chown -R www-data:www-data /var/www && \
     chmod -R 755 /var/www && \
-    \
-    # Install default PHP extensions \
-    IPE_GD_WITHOUTAVIF=1 install-php-extensions ${PHP_EXTENSIONS}
-
-RUN \
     echo "### ENABLE APACHE MODS ###" && \
     a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias
 
