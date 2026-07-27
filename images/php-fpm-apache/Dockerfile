@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
+ARG PHP_VERSION
+ARG OS_VERSION
 FROM stage-base
-ENV APACHE_CONFDIR=/etc/apache2
-ENV APACHE_ENVVARS="${APACHE_CONFDIR}/envvars"
 
 ARG S6_DIR='/opt/s6'
 ARG PACKAGES_APACHE='libfcgi-bin apache2 locales procps git zip openssh-client jq'
@@ -9,6 +9,13 @@ ARG PHP_EXTENSIONS='mysqli opcache pcntl pdo_mysql zip bcmath intl ldap soap mcr
 ARG REPOSITORY_BUILD_VERSION='dev'
 ARG PHP_EXT_INSTALLER_VERSION='2.7.0'
 ARG HEALTHCHECK_SILENCE
+
+#
+# Apache Configuration
+#
+
+ENV APACHE_CONFDIR=/etc/apache2
+ENV APACHE_ENVVARS="${APACHE_CONFDIR}/envvars"
 ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     APACHE_START_SERVERS="2" \
     APACHE_MIN_SPARE_THREADS="10" \
@@ -19,15 +26,19 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     APACHE_MAX_CONNECTIONS_PER_CHILD="0" \
     APACHE_RUN_USER="www-data" \
     APACHE_RUN_GROUP="www-data" \
-    APP_BASE_DIR=/var/www/html \
-    CONTAINER_ENV="prod" \
-    COMPOSER_ALLOW_SUPERUSER=1 \
-    COMPOSER_HOME=/composer \
-    COMPOSER_MAX_PARALLEL_HTTP=24 \
-    DISABLE_DEFAULT_CONFIG=false \
-    HEALTHCHECK_PATH="/healthcheck" \
-    LOG_OUTPUT_LEVEL=warn \
-    PHP_DATE_TIMEZONE="America/Chicago" \
+    APACHE_HTTP=8080 \
+    APACHE_HTTPS=8443
+
+    # These are for reference to apps only; they are the external ports for the container, not internal ones!
+ENV COMPOSE_HTTP=8080 \
+    COMPOSE_HTTPS=8443 \
+    COMPOSE_HOST="localhost"
+
+ #
+ # PHP Configuration
+ #
+
+ENV PHP_DATE_TIMEZONE="America/Chicago" \
     PHP_DISPLAY_ERRORS=Off \
     PHP_DISPLAY_STARTUP_ERRORS=Off \
     PHP_ERROR_LOG="/dev/stderr" \
@@ -52,12 +63,23 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     PHP_REALPATH_CACHE_SIZE=4096K \
     PHP_REALPATH_CACHE_TTL=600 \
     PHP_SESSION_COOKIE_SECURE=false \
-    PHP_UPLOAD_MAX_FILE_SIZE="100M" \
+    PHP_UPLOAD_MAX_FILE_SIZE="100M"
 
-# These are for reference to apps only; they are the external ports for the container, not internal ones!
-ENV COMPOSE_HTTP=8080 \
-    COMPOSE_HTTPS=8443 \
-    COMPOSE_HOST="localhost"
+# Composer & PHP tools
+
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    COMPOSER_HOME=/composer \
+    COMPOSER_MAX_PARALLEL_HTTP=24
+
+#
+# Other Values
+#
+
+ENV APP_BASE_DIR=/var/www/html \
+    CONTAINER_ENV="prod" \
+    DISABLE_DEFAULT_CONFIG=false \
+    HEALTHCHECK_PATH="/healthcheck" \
+    LOG_OUTPUT_LEVEL=warn
 
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/$PHP_EXT_INSTALLER_VERSION/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/v0.5.0/php-fpm-healthcheck /usr/local/bin/
