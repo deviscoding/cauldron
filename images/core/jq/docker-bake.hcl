@@ -10,9 +10,13 @@ variable "JQ_VERSION" {
   default = "1.7.1"
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 target jq {
   # Context is relative to where you execute the bake command (the root)
-  context    = "./core/jq"
+  context    = "${VAT_DIR}/core/jq"
   name       = "jq-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }

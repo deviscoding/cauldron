@@ -10,10 +10,14 @@ variable "SASS_VERSION" {
   default = "1.77.1"
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 target "dart-sass" {
   # Context is relative to where you execute the bake command (the root)
   name       = "dart-sass-${os}"
-  context    = "./core/dart-sass"
+  context    = "${VAT_DIR}/core/dart-sass"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
   platforms  = split(",", PLATFORMS)

@@ -15,9 +15,13 @@ variable "GH_PACKAGES" {
   default = ["apt-utils"]
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 target gh {
   # Context is relative to where you execute the bake command (the root)
-  context    = "./core/gh"
+  context    = "${VAT_DIR}/core/gh"
   name       = "gh-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }

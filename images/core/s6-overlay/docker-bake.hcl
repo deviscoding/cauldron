@@ -10,9 +10,13 @@ variable "S6_OVERLAY_VERSION" {
   default = "3.2.0.2"
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 target s6-overlay {
   # Context is relative to where you execute the bake command (the root)
-  context    = "./core/s6-overlay"
+  context    = "${VAT_DIR}/core/s6-overlay"
   name       = "s6-overlay-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }

@@ -49,10 +49,16 @@ variable "IMAGE" {
   default = "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache"
 }
 
+# VAT Build Variables
+variable "VAT_DIR" {
+  type = string
+  default = "."
+}
+
 target "stage-base" {
   matrix     = { os = OS_MATRIX }
   name       = "stage-base-${os}"
-  context    = "./base"
+  context    = "${VAT_DIR}/base"
   dockerfile = "Dockerfile"
   platforms = split(",", PLATFORMS)
 
@@ -60,8 +66,9 @@ target "stage-base" {
     OS_VERSION      = "${os}"
     PHP_VERSION     = "${PHP_MAJOR}.${PHP_MINOR}"
   }
+
   contexts = {
-    common = "./common"
+    "common" = "${VAT_DIR}/common"
   }
 }
 
@@ -83,7 +90,7 @@ target "php" {
   }
 
   name       = "vat-php${version}-${os}"
-  context    = "./php-fpm-apache"
+  context    = "${VAT_DIR}/php-fpm-apache"
   dockerfile = "Dockerfile"
   platforms  = split(",", PLATFORMS)
 
@@ -91,9 +98,9 @@ target "php" {
     "${resolve_image(IMAGE)}:${TAG}"
   ]
   contexts = {
-    common = "./common"
-    apache = "./apache"
-    php    = "./php"
+    common           = "${VAT_DIR}/common"
+    apache           = "${VAT_DIR}/apache"
+    php              = "${VAT_DIR}/php"
     stage-base       = "target:stage-base"
     stage-gh         = "target:stage-gh"
     stage-jq         = "target:stage-jq"

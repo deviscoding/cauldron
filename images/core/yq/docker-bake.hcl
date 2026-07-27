@@ -10,10 +10,14 @@ variable "YQ_VERSION" {
   default = "latest"
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 # reset line
 target "yq" {
   # Context is relative to where you execute the bake command (the root)
-  context    = "./core/yq"
+  context    = "${VAT_DIR}/core/yq"
   name       = "yq-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }

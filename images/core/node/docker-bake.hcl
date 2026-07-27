@@ -10,9 +10,13 @@ variable "NODE_VERSION" {
   default = "24"
 }
 
+variable "VAT_DIR" {
+  default = "."
+}
+
 target node {
   # Context is relative to where you execute the bake command (the root)
-  context    = "./core/node"
+  context    = "${VAT_DIR}/core/node"
   name       = "node-${os}"
   dockerfile = "Dockerfile"
   matrix     = { os = OS_MATRIX }
