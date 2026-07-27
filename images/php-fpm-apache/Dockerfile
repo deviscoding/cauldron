@@ -8,6 +8,7 @@ ARG PACKAGES_APACHE='libfcgi-bin apache2 locales procps git zip openssh-client j
 ARG PHP_EXTENSIONS='mysqli opcache pcntl pdo_mysql zip bcmath intl ldap soap mcrypt apcu calendar exif gd imagick sodium'
 ARG REPOSITORY_BUILD_VERSION='dev'
 ARG PHP_EXT_INSTALLER_VERSION='2.7.0'
+ARG HEALTHCHECK_SILENCE
 ENV APACHE_DOCUMENT_ROOT=/var/www/html \
     APACHE_START_SERVERS="2" \
     APACHE_MIN_SPARE_THREADS="10" \
@@ -65,7 +66,7 @@ COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "/var/www/do
 # Copy php.ini and php-fpm config
 COPY --from=php usr/local/etc/php/php.ini /usr/local/etc/php/
 COPY usr/local/etc/php-fpm.d/zz-docker.conf /usr/local/etc/php-fpm.d/
-COPY usr/local/etc/php-fpm.d/zz-silence-health.conf /usr/local/etc/php-fpm.d/
+COPY usr/local/etc/php-fpm.d/zz-silence-health-${HEALTHCHECK_SILENCE}.conf /usr/local/etc/php-fpm.d/zz-silence-health.conf
 
 # Copy Configuration Utility
 COPY --chmod=0755 --from=apache ./usr/local/sbin/suggest-config /usr/local/sbin/suggest-config

@@ -107,8 +107,10 @@ target "php" {
     stage-dart-sass  = "target:stage-dart-sass"
     stage-s6-overlay = "target:stage-s6-overlay"
   }
+
   args = {
     S6_DIR                    = S6_DIR
+    HEALTHCHECK_SILENCE       = parseint(version, 10) >= 82 ? "modern" : "legacy"
     OS_VERSION                = "${os}"
     PHP_VERSION               = "${substr(version, 0, 1)}.${substr(version, 1,-1)}"
     PACKAGES_APACHE           = "libfcgi-bin apache2 locales procps git zip openssh-client rsync"
