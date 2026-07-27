@@ -11,7 +11,7 @@ COPY --from=builder-node /opt /opt
 RUN \
   ln -s "$(find /opt -type f -name LICENSE -print -quit)" /usr/local/share/doc/yarn/LICENSE && \
   /usr/local/sbin/extract-node-license "/usr/local/share/doc/node/LICENSE" "/usr/local/share/doc" && \
-  /usr/local/bin/license-handler "/usr/local/share/doc/yarn/LICENSE" --source "$YARN_URL" \
+  /usr/local/sbin/license-handler "/usr/local/share/doc/yarn/LICENSE" --source "$YARN_URL" \
     --files "/usr/local/bin/yarn" --output "/usr/local/share/doc/yarn/copyright"
 
 FROM scratch

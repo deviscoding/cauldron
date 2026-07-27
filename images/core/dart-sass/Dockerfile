@@ -15,7 +15,7 @@ RUN \
   && tar -C "$SASS_DIR/usr/bin" -xzvf "/opt/dart-sass-${UPSTREAM_VERSION}-linux-${ARCH}.tar.gz" --strip-components=1 \
   && mkdir -p "$SASS_DOC" \
   && mv "$SASS_DIR/usr/bin/src/LICENSE" "$SASS_DOC/" \
-  && /usr/local/bin/license-handler "$SASS_DOC/LICENSE" \
+  && /usr/local/sbin/license-handler "$SASS_DOC/LICENSE" \
   --source https://github.com/sass/dart-sass --files "$SASS_FILES" --output "$SASS_DOC/copyright"
 
 FROM scratch

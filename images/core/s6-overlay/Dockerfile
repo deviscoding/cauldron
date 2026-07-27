@@ -20,7 +20,7 @@ RUN ARCH="${TARGETARCH}" && TARGET_DIR="${S6_DIR}" && TARGET_DOC="${TARGET_DIR}/
     tar --strip-components=1 -xzpf /tmp/v${S6_OVERLAY_VERSION}.tar.gz -C "/tmp" && \
     cp -a /tmp/COPYING "${TARGET_DOC}" && \
     rm -R /tmp/* && \
-    /usr/local/bin/license-handler "${TARGET_DOC}/COPYING" --source "${S6_URL}" --files "$S6_FILES" --output "${TARGET_DOC}/copyright"
+    /usr/local/sbin/license-handler "${TARGET_DOC}/COPYING" --source "${S6_URL}" --files "$S6_FILES" --output "${TARGET_DOC}/copyright"
 
 FROM scratch
 COPY --from=common ./etc/s6-overlay/ /etc/s6-overlay/
