@@ -3,6 +3,22 @@ variable "OS_MATRIX" {
   default = ["jessie", "stretch", "bookworm", "bullseye", "trixie"]
 }
 
+# VAT Inherited Variables
+variable "PHP_MAJOR" {
+  type    = string
+  default = "8"
+}
+
+variable "PHP_MINOR" {
+  type    = string
+  default = "5"
+}
+
+variable "OS_VERSION" {
+  type = string
+  default = "trixie"
+}
+
 variable "PLATFORMS" {
   # Define multiple target architectures here
   default = ["linux/amd64", "linux/arm64"]
@@ -16,20 +32,13 @@ variable "TAG" {
   default = "latest"
 }
 
-variable "OS_VERSION" {
-  default = "stretch"
-}
-
-variable "PHP_VERSION" {
-  default = "7.0.33"
-}
-
 variable "PHP_EXT_INSTALLER_VERSION" {
   default = "2.7.0"
 }
 
 variable "IMAGE_NAME" {
-  default = "php${PHP_VERSION}-fpm-apache"
+  default = "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache"
+}
 }
 
 variable "REGISTRY_NAME" {
@@ -44,7 +53,7 @@ target "stage-base" {
   platforms  = PLATFORMS
   args = {
     OS_VERSION      = "${os}"
-    PHP_VERSION     = PHP_VERSION
+    PHP_VERSION     = "${PHP_MAJOR}.${PHP_MINOR}"
   }
   contexts = {
     common = "./common"
@@ -71,6 +80,8 @@ target "php70-fpm-apache" {
   }
   args = {
     S6_DIR                    = S6_DIR
+    OS_VERSION                = "${os}"
+    PHP_VERSION               = "${substr(version, 0, 1)}.${substr(version, 1,-1)}"
     PACKAGES_APACHE           = "libfcgi-bin apache2 locales procps git zip openssh-client"
     PHP_EXTENSIONS            = "mysqli opcache pcntl pdo_mysql zip bcmath intl ldap soap mcrypt apcu calendar exif gd imagick sodium"
     REPOSITORY_BUILD_VERSION  = "dev"
