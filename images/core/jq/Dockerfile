@@ -14,4 +14,6 @@ RUN \
       --files "/usr/local/bin/jq" --output "/opt/jq/usr/local/share/doc/jq/copyright"
   
 FROM scratch
+# Forces BuildKit to keep "stage-base" alive.
+ARG BASE_STAGE=builder-jq
 COPY --from=builder-jq /opt/jq/ /

@@ -23,5 +23,6 @@ RUN ARCH="${TARGETARCH}" && TARGET_DIR="${S6_DIR}" && TARGET_DOC="${TARGET_DIR}/
     /usr/local/sbin/license-handler "${TARGET_DOC}/COPYING" --source "${S6_URL}" --files "$S6_FILES" --output "${TARGET_DOC}/copyright"
 
 FROM scratch
-COPY --from=common ./etc/s6-overlay/ /etc/s6-overlay/
+# Forces BuildKit to keep "stage-base" alive.
+ARG BASE_STAGE=builder-s6
 COPY --from=builder-s6 /opt/s6 /
