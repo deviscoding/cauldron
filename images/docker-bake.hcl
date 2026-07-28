@@ -47,10 +47,6 @@ variable "TAG" {
   default = "latest"
 }
 
-variable "PHP_EXT_INSTALLER_VERSION" {
-  default = "2.7.0"
-}
-
 variable "IMAGE" {
   type    = string
   default = "${USERNAME}/php${PHP_MAJOR}.${PHP_MINOR}-fpm-apache"
