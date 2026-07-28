@@ -47,9 +47,25 @@ ENV COMPOSE_HTTP=8080 \
     COMPOSE_HTTPS=8443 \
     COMPOSE_HOST="localhost"
 
- #
- # PHP Configuration
- #
+# Copy utilities & configuration profiles
+COPY --from=apache etc/apache2/conf-available/docker-php.conf "${APACHE_CONFDIR}/conf-available/docker-php.conf"
+COPY --from=apache etc/apache2/conf-available/docker-dev.conf "${APACHE_CONFDIR}/conf-available/docker-dev.conf"
+COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "${APACHE_CONFDIR}/conf-available/docker-mpm-event.conf"
+COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
+
+# Apache Startup Files
+COPY --from=apache --chmod=755 ./vat-apache.sh /usr/local/sbin/vat-apache
+COPY --from=apache --chmod=755 ./usr/local/sbin/vat-suggest-config.sh /usr/local/sbin/vat-suggest-config
+COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/bin/
+COPY --from=apache ./etc/s6-overlay/ /etc/s6-overlay/
+
+RUN a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias && \
+    chown -R www-data:www-data /var/www /etc/apache2 && chmod -R 755 /var/www && \
+    /usr/local/sbin/vat-apache
+
+#
+# PHP Configuration
+#
 
 ENV PHP_DATE_TIMEZONE="America/Chicago" \
     PHP_DISPLAY_ERRORS=Off \
@@ -96,7 +112,7 @@ COPY --from=stage-composer --chmod=755 /usr/bin/composer /usr/local/bin/composer
 RUN mkdir -p "$COMPOSER_HOME" && chown -R www-data:www-data "${COMPOSER_HOME}"
 
 #
-# Other Values
+# Final Steps
 #
 
 ENV APP_BASE_DIR=/var/www \
@@ -104,27 +120,6 @@ ENV APP_BASE_DIR=/var/www \
     DISABLE_DEFAULT_CONFIG=false \
     HEALTHCHECK_PATH="/healthcheck" \
     LOG_OUTPUT_LEVEL=warn
-
-
-# These are copied into temporary paths, and must be moved after apache is installed
-COPY --from=apache etc/apache2/conf-available/docker-php.conf "${APACHE_CONFDIR}/conf-available/docker-php.conf"
-COPY --from=apache etc/apache2/conf-available/docker-dev.conf "${APACHE_CONFDIR}/conf-available/docker-dev.conf"
-COPY --from=apache etc/apache2/conf-available/docker-mpm-event.conf "${APACHE_CONFDIR}/conf-available/docker-mpm-event.conf"
-COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
-
-# Copy Configuration Utility
-COPY --chmod=0755 --from=apache ./usr/local/sbin/suggest-config /usr/local/sbin/suggest-config
-
-# apache, other dependencies, pecl extensions, and clean up
-RUN \
-    # Ensure /var/www/ has the correct permissions \
-    chown -R www-data:www-data /var/www && \
-    chmod -R 755 /var/www && \
-    echo "### ENABLE APACHE MODS ###" && \
-    a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias
-
-# Apache Startup Files
-COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/local/bin/vat-entrypoint
 
 # Add Environment Variables & Correct Permissions
 RUN --mount=type=bind,from=stage-plugins,source=/out,target=/src/plugins \
