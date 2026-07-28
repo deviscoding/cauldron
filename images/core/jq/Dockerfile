@@ -10,7 +10,7 @@ COPY --chmod=777 --from=jqlang-jq /AUTHORS "/opt/jq/licenses/jq/AUTHORS"
 RUN \
     vat-config --prefix /opt/jq --exec jq && \
     mkdir -p "/opt/jq/usr/local/share/doc/jq" && \
-    /usr/local/sbin/license-handler "/opt/jq/licenses/jq/COPYING" -source "$JQ_URL" \
+    /usr/local/sbin/license-handler "/opt/jq/licenses/jq/COPYING" --source "$JQ_URL" \
       --files "/usr/local/bin/jq" --output "/opt/jq/usr/local/share/doc/jq/copyright"
   
 FROM scratch
