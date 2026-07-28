@@ -5,11 +5,6 @@ target "_vat" {
   }
 }
 
-variable "OS_MATRIX" {
-  type = list(string)
-  default = ["jessie", "stretch", "bookworm", "bullseye", "trixie"]
-}
-
 # VAT Inherited Variables
 variable "PHP_MAJOR" {
   type    = string
@@ -24,6 +19,11 @@ variable "PHP_MINOR" {
 variable "OS_VERSION" {
   type = string
   default = "trixie"
+}
+
+variable "OS_MATRIX" {
+  type = list(string)
+  default = ["jessie", "stretch", "bookworm", "bullseye", "trixie"]
 }
 
 variable "PLATFORMS" {
