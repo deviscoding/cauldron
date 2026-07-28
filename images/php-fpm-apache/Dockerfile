@@ -3,7 +3,6 @@ ARG PHP_VERSION
 ARG OS_VERSION
 FROM stage-base
 
-ARG S6_DIR='/opt/s6'
 ARG PACKAGES
 ARG PHP_EXTENSIONS
 ARG PHP_EXT_INSTALLER_VERSION
@@ -56,7 +55,7 @@ COPY --from=apache etc/apache2/ports.conf "${APACHE_CONFDIR}/ports.conf"
 # Apache Startup Files
 COPY --from=apache --chmod=755 ./vat-apache.sh /usr/local/sbin/vat-apache
 COPY --from=apache --chmod=755 ./usr/local/sbin/vat-suggest-config.sh /usr/local/sbin/vat-suggest-config
-COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/bin/
+COPY --from=apache --chmod=755 vat-entrypoint.sh /usr/bin/vat-entrypoint
 COPY --from=apache ./etc/s6-overlay/ /etc/s6-overlay/
 
 RUN a2enmod actions autoindex deflate expires headers http2 proxy proxy_http proxy_fcgi remoteip rewrite setenvif ssl unique_id vhost_alias && \
@@ -115,31 +114,18 @@ RUN mkdir -p "$COMPOSER_HOME" && chown -R www-data:www-data "${COMPOSER_HOME}"
 # Final Steps
 #
 
-ENV APP_BASE_DIR=/var/www \
-    CONTAINER_ENV="prod" \
-    DISABLE_DEFAULT_CONFIG=false \
+ENV APP_DIR=/var/www \
+    APP_ENV="prod" \
+    APP_DEBUG=0 \
     HEALTHCHECK_PATH="/healthcheck" \
-    LOG_OUTPUT_LEVEL=warn
+    LOG_LEVEL=warn \
+    S6_ROOTLESS=1
 
-# Add Environment Variables & Correct Permissions
-RUN --mount=type=bind,from=stage-plugins,source=/out,target=/src/plugins \
-    echo "### CONFIGURING ENVIRONMENT VARIABLES ###" && \
-    /usr/local/sbin/vat-config --exec git curl zip composer && \
-    /usr/local/sbin/vat-config --finish && \
-    echo "### CORRECTING S6 PERMISSIONS ###" && \
-    chmod 755 /etc/s6-overlay/s6-rc.d/*/run && \
-    chmod 755 /etc/s6-overlay/s6-rc.d/*/data/check
-
-ENTRYPOINT ["vat-entrypoint"]
-
-# Set stop signal to SIGQUIT for a graceful shutdown
-# (https://github.com/just-containers/s6-overlay/issues/586)
-STOPSIGNAL SIGQUIT
-
-WORKDIR ${APP_BASE_DIR}
-
+USER www-data
+WORKDIR $APP_DIR
 EXPOSE 8080 8443
-
+ENTRYPOINT ["vat-entrypoint"]
+STOPSIGNAL SIGQUIT
 CMD ["/init"]
 
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 \
