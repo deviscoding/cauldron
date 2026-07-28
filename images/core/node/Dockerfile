@@ -3,9 +3,9 @@ ARG UPSTREAM_VERSION
 ARG TARGETARCH
 FROM node:${UPSTREAM_VERSION} as builder-node
 
-FROM builder-base as license-builder
+FROM builder-base AS license-builder
 ARG YARN_URL="https://github.com/yarnpkg/yarn"
-COPY --chmod 755 extract-node-license /usr/local/sbin/
+COPY --chmod=755 extract-node-license /usr/local/sbin/
 COPY --from=builder-node /usr/local/LICENSE /usr/local/share/doc/nodejs/LICENSE
 COPY --from=builder-node /opt /opt
 RUN \

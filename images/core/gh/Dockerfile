@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM stage-base as builder-gh
+FROM stage-base AS builder-gh
 ARG UPSTREAM_VERSION=2.49.2
 ARG TARGETARCH
 ARG GH_PACKAGES='apt-utils'

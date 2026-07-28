@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM stage-base as builder-s6
+FROM stage-base AS builder-s6
 ARG TARGETARCH
 ARG UPSTREAM_VERSION
 ARG S6_DIR='/opt/s6'
