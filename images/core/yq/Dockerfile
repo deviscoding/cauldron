@@ -1,5 +1,6 @@
-# # syntax=docker/dockerfile:1.4
-FROM mikefarah/yq:latest AS mikefarah-yq
+# syntax=docker/dockerfile:1.4
+ARG UPSTREAM_VERSION
+FROM mikefarah/yq:${UPSTREAM_VERSION} AS mikefarah-yq
 ARG TARGETARCH
 ARG YQ_URL="https://github.com/mikefarah/yq"
 
