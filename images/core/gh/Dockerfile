@@ -10,12 +10,16 @@ ADD https://github.com/cli/cli/releases/download/v${UPSTREAM_VERSION}/gh_${UPSTR
 RUN \
   ARCH="${TARGETARCH}" && \
   apt-get update && apt-get install -y --no-install-recommends $GH_PACKAGES /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.deb && \
-  vat-config --exec "gh"  && \
+  /usr/local/sbin/vat-config --exec "gh"  && \
   tar --strip-components=1 -xzpf /opt/gh_${UPSTREAM_VERSION}_linux_${ARCH}.tar.gz -C "/tmp" && \
-  cp -a /tmp/LICENSE "/usr/share/doc/gh" && \
+  mkdir -p "/usr/share/doc/gh" && \
+  cp -a /tmp/LICENSE "/usr/share/doc/gh/LICENSE" && \
+  cp -a /tmp/share/man "/usr/share/man" && \
   rm -R /tmp/* && \
-  /usr/local/sbin/license-handler "/usr/share/doc/gh/LICENSE" --source "${S6_URL}" --files "/usr/bin/gh" --output "/usr/share/doc/gh/copyright"
+  /usr/local/sbin/license-handler "/usr/share/doc/gh/LICENSE" --source "https://github.com/cli/cli" --files "/usr/bin/gh" --output "/usr/share/doc/gh/copyright"
 
 FROM scratch
-COPY --chmod=755 --from=builder-gh /usr/bin/gh /usr/bin/gh
+COPY --chmod=755 --from=builder-gh /usr/bin/gh /usr/local/bin/gh
+COPY --from=builder-gh /usr/share/man/* /usr/share/man/
 COPY --from=builder-gh /usr/share/doc/gh /usr/share/doc/gh
+COPY --from=builder-gh /etc/vat/exec.d/gh /etc/vat/exec.d/gh
