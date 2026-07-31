@@ -134,7 +134,7 @@ if $flagFinish; then
     if [ ! -f "$exe" ]; then
       resolved=$(try_which "$exe")
       if  [ -z "$resolved" ]; then
-        echo "ERROR: Could not locate $i in the path or at any of these locations:"
+        echo "ERROR: Could not locate $file in the path or at any of these locations:"
         for t in "${try[@]}"; do
           echo "  ${t}/${i}"
         done
