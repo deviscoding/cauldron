@@ -167,6 +167,10 @@ if $flagSet; then
 fi
 
 if $flagFinish; then
+  echo "### Start: COPYING PLUGIN FILES ###"
+  cp -av /src/plugins/. /
+  echo "### End: COPYING PLUGIN FILES ###"
+
   # Turn Executables into Environment Variables
   echo "### START: CREATING ENVIRONMENT ###"
   for file in "$VAT_EXE_DIR"/*; do
