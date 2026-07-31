@@ -49,7 +49,7 @@ function vat-putexe() {
   local val file
 
   val="$(cat)"
-  file="$val" && [ -f "$val" ] && file=$(basename "$val")
+  file="$val" && [[ "$file" == /* ]] && file=$(basename "$val")
   mkdir -p "${vat_exec}"
 
   printf "%s" "$val" > "${vat_exec}/${file}"
