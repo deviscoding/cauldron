@@ -1,15 +1,13 @@
 #!/bin/bash
 
-## endregion ######################################## Functions
-
 ## region ########################################### Variables
 
-s6env="/etc/s6-overlay/env"
 try=("/usr/local/bin" "/usr/bin")
 excluded=("s6-overlay")
 transform=("s#dart\-##")
 VAT_ENV_DIR="/etc/vat/env.d"
 VAT_EXE_DIR="/etc/vat/exec.d"
+S6_ENV_DIR="/var/run/s6/container_environment"
 
 ## endregion ######################################## Variables
 
@@ -55,50 +53,6 @@ function vat-putexe() {
   printf "%s" "$val" > "${vat_exec}/${file}"
 }
 
-function get-s6-ver() {
-  local tryVer i
-
-  if [ -d "/etc/s6-overlay" ]; then
-    tryVer=("/package/admin/s6-overlay/version" "/etc/s6-overlay/version")
-    for i in "${tryVer[@]}"; do
-      if [ -f "$i" ]; then
-        cat "$i"
-        return 0
-      fi
-    done
-    if [ -d "/etc/s6-overlay/s6-rc.d" ] || [ -d "/command" ]; then
-      echo "3"
-      return 0
-    else
-      echo "2"
-      return 0
-    fi
-  else
-    return 1
-  fi
-}
-
-function get-s6-env-dir() {
-  local ver major
-
-  echo "/etc/s6-overlay/env"
-  return 0
-
-  ver=$(get-s6-ver)
-  if [ -n "$ver" ]; then
-    major=$(echo "$ver" | awk -F'.' '{print $1}')
-    if [ "$major" -ge 3 ]; then
-      echo "/etc/s6-overlay/env"
-    else
-      echo "/var/run/s6/container_environment"
-    fi
-
-    return 0
-  fi
-
-  return 1
-}
-
 ## endregion ######################################## Functions
 
 ## region ########################################### Main Code
@@ -106,13 +60,14 @@ function get-s6-env-dir() {
 #
 # Input Handling
 #
-flagInit=false; flagExe=false; flagFinish=false; flagSet=false; flagPrefix=""; args=()
+flagInit=false; flagExe=false; flagFinish=false; flagSet=false; flagPrefix=""; flagS6Init=false; args=()
 while [[ "$#" -gt 0 ]]; do
   case $1 in
   --set)       flagSet=true; ;;
   --init)      flagInit=true; ;;
   --exec)      flagExe=true; ;;
   --finish)    flagFinish=true; ;;
+  --s6init)    flagS6Init=true ;;
   --prefix)    flagPrefix="$2"; shift ;;
   *)           args+=("$1")
   esac
@@ -128,13 +83,12 @@ if $flagInit; then
   echo "source /etc/profile.d/vat-env" >> /etc/bash.bashrc
   mkdir -p "/etc/zsh" && echo "source /etc/profile.d/vat-env" >> /etc/zsh/zshrc
   mkdir -p "$VAT_ENV_DIR" "$VAT_EXE_DIR" /opt/vat/bin /opt/vat/sbin
-
-  if [ -d "/etc/s6-overlay" ]; then
-    mkdir -p "$s6env"
-    copy -a "${VAT_ENV_DIR}/." "$s6env"
-  fi
-
   exit 0
+fi
+
+if $flagS6Init; then
+  mkdir -p "$S6_ENV_DIR" && cp -a "$VAT_ENV_DIR"/. "${S6_ENV_DIR}/"
+  exit $?
 fi
 
 if $flagExe; then
