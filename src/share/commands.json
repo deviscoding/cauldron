@@ -1,0 +1,77 @@
+{
+  "commands": {
+    "equip": {
+      "description": "Install vat onto a remote device via SSH.",
+      "usage": "vat equip <remote-device-address> [options]"
+    },
+    "prep": {
+      "description": "Prepares the container and host environment for use.",
+      "usage": "vat prep [--file,--env-file,--project-directory,--name options]"
+    },
+    "scoop": {
+      "description": "Clones a Vat Recipe for use on this system.",
+      "usage": "vat scoop [REPO URL] [STACK NAME]"
+    },
+    "pull": {
+      "description": "Pulls updates to a Vat Recipe and the matching container",
+      "usage": "vat pull"
+    },
+    "stir": {
+      "description": "Builds a container image",
+      "usage": "vat stir [PATH TO docker-compose.hcl]"
+    },
+    "shell": {
+      "description": "Enter a shell session in a container",
+      "usage": "vat [options] shell [SERVICE] [options]"
+    },
+    "import": {
+      "description": "Import a container recipe into Docker Desktop (on macOS)",
+      "usage": "vat [options] import [service]"
+    },
+    "parse": {
+      "description": "Parses Docker Compose arguments.",
+      "usage": "vat parse [options] [DOCKER COMPOSE OPTIONS]"
+    },
+    "metadata": {
+      "description": "Displays metadata for a Docker Compose stack.",
+      "usage": "vat metadata [DOCKER COMPOSE OPTIONS]"
+    },
+    "help": {
+      "description": "Displays help for the command."
+    }
+  },
+  "options": {
+    "help": {
+      "description": "Displays help for the command",
+      "expects_value": false,
+      "value_type": "boolean",
+      "shorthand": "h",
+      "default_value": null,
+      "repeatable": false
+    },
+    "quiet": {
+      "description": "Shows only necessary output",
+      "expects_value": false,
+      "value_type": "boolean",
+      "shorthand": "h",
+      "default_value": "false",
+      "repeatable": false
+    },
+    "verbose": {
+      "description": "Shows verbose output",
+      "expects_value": false,
+      "value_type": "boolean",
+      "shorthand": "v",
+      "default_value": "false",
+      "repeatable": false
+    },
+    "version": {
+      "description": "Shows only necessary output.",
+      "expects_value": false,
+      "value_type": "boolean",
+      "shorthand": "V",
+      "default_value": null,
+      "repeatable": false
+    }
+  }
+}
