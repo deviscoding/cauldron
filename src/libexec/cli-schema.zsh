@@ -15,7 +15,7 @@ selfDir=$(cd -- "$(dirname -- "$0")" && pwd -P)
 selfLib=$( cd "${selfDir/\/libexec//lib}" && pwd -P)
 cmdBlock=("bridge" "commit" "convert" "create" "export" "push" "rm" "scale" "wait" "watch")
 
-source "$selfLib/_colors.zsh"
+source "$selfLib/_colors.sh"
 
 function docs-get-hash() {
   local cwd=$(pwd)
