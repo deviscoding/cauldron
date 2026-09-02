@@ -88,7 +88,7 @@ if [[ -d "$repoDir" ]]; then
     >&2 echo "${RED}Error: Could not pull docker/compose repo!"
     exit $retval
   fi
-  newHash=$(docs-docs-get-hash)
+  newHash=$(docs-get-hash)
   if [[ "$prevHash" != "$newHash" ]]; then
     isUpdated=true
   fi
