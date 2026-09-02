@@ -74,9 +74,9 @@ fi
 
 # Cache Options
 isUpdated=false
-selfCache="$HOME/.cache/$selfName/${version:-unknown}" &&
+selfCache="$HOME/.cache/$selfApp/${composeVer-unknown}" &&
   [[ "$OSTYPE" == "darwin"* ]] &&
-  selfCache="$HOME/Library/Caches/$selfName/${version:-unknown}"
+  selfCache="$HOME/Library/Caches/$selfApp/${composeVer-unknown}"
 cacheFile="$selfCache/compose-options.json"
 
 # If the cache directory exists, pull.
