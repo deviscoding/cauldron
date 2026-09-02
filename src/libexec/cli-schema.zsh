@@ -50,8 +50,7 @@ function docs-repo-pull() {
   git clean -dxf >/dev/null 2>&1 &&
     git reset --hard HEAD >/dev/null 2>&1 &&
     git clean -dxf >/dev/null 2>&1 &&
-    git fetch --depth 1 origin "refs/tags/v$composeVer/tags/v$composeVer" >/dev/null 2>&1 &&
-    git checkout --quiet "tags/v$composeVer" >/dev/null 2>&1 &&
+    git fetch --depth 1 origin "v$composeVer" >/dev/null 2>&1 &&
     git sparse-checkout set docs/reference >/dev/null 2>&1 
 
   retval=$?
