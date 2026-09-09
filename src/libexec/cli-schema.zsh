@@ -172,7 +172,7 @@ if $isUpdated || [[ ! -f "$cacheFile" ]]; then
 
   # Put the JSON together
   result=$(jq --argjson sc "$subcommands" --argjson opt "$options_json" '. | .commands = $sc | .options = $opt' <<<"$result")
-  result=$(jq --slurpfile extra "$selfDir/../share/commands.json" '.commands = ((.commands + $extra[0].commands) | to_entries | sort_by(.key) | from_entries)' <<<"$result")
+  result=$(jq --slurpfile extra "$selfDir/../share/commands.json" '.aliases = $extra[0].aliases // {} | .commands = ((.commands + $extra[0].commands) | to_entries | sort_by(.key) | from_entries)' <<<"$result")
 
   # Save the final JSON to a file
   echo "$result" >"$cacheFile"

@@ -73,5 +73,9 @@
       "default_value": null,
       "repeatable": false
     }
+  },
+  "aliases": {
+    "dir": "project-directory",
+    "name": "project-name"
   }
 }
