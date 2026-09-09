@@ -133,7 +133,7 @@ if $isUpdated || [[ ! -f "$cacheFile" ]]; then
               "description": (if .[3] == null or .[3] == "null" then "" else .[3] | tostring | sub("^\\s+"; "") | sub("\\s+$"; "") end),
               "shorthand": (if .[4] == null or .[4] == "null" then null else .[4] | tostring end),
               "repeatable": (if .[1] == "stringArray" then true else false end),
-              "expects_value": (if .[1] == "boolean" then false else true end),
+              "expects_value": (if .[1] == "bool" then false else true end),
             }
           })
         | add // {}'
@@ -164,7 +164,7 @@ if $isUpdated || [[ ! -f "$cacheFile" ]]; then
             "description": (if .[3] == null or .[3] == "null" then "" else .[3] | tostring | sub("^\\s+"; "") | sub("\\s+$"; "") end),
             "shorthand": (if .[4] == null or .[4] == "null" then null else .[4] | tostring end),
             "repeatable": (if .[1] == "stringArray" then true else false end),
-            "expects_value": (if .[1] == "boolean" then false else true end),
+            "expects_value": (if .[1] == "bool" then false else true end),
           }
         })
       | add // {}'
