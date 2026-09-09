@@ -100,6 +100,15 @@ else
   fi
 fi
 
+while [[ -n "$1" ]]; do
+  case "$1" in
+  --no-cache)
+    isUpdated=true
+    ;;
+  esac
+  shift
+done
+
 if $isUpdated || [[ ! -f "$cacheFile" ]]; then
   target_dir="$repoDir/docs/reference"
 
